@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+.vscode/
+.idea/
+.claude/
+*.tsbuildinfo
+test/fixtures/*.mp3
