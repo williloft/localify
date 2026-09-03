@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { readTags, writeTags, type EditableTags, type ReadResult, type CoverArt } from './lib/id3';
 import { buildFilename, type NamePattern } from './lib/filename';
 import { TagEditor } from './TagEditor';
+import { Icon } from './Icon';
 
 const PATTERN_KEY = 'localify:name-pattern';
 
@@ -193,9 +194,7 @@ export default function App() {
                   : 'border-slate-200 hover:border-slate-300'
               }`}
             >
-              <span className="material-symbols-outlined text-5xl text-slate-300 mb-4 block">
-                music_note
-              </span>
+              <Icon name="music_note" className="w-12 h-12 text-slate-300 mb-4" />
               <p className="font-headline-md text-on-surface mb-1">
                 {busy ? 'Læser filer…' : 'Træk dine MP3-filer herind'}
               </p>
@@ -221,7 +220,7 @@ export default function App() {
                       className="p-0.5 rounded-lg text-primary hover:bg-primary-fixed/20 transition-colors"
                       title="Tilføj flere"
                     >
-                      <span className="material-symbols-outlined text-xl leading-none">add</span>
+                      <Icon name="add" className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
@@ -236,9 +235,10 @@ export default function App() {
                             : 'hover:bg-surface-container-low text-secondary'
                         }`}
                       >
-                        <span className="material-symbols-outlined text-base shrink-0 opacity-60">
-                          {f.saved ? 'check_circle' : f.dirty ? 'edit' : 'audio_file'}
-                        </span>
+                        <Icon
+                          name={f.saved ? 'check_circle' : f.dirty ? 'edit' : 'audio_file'}
+                          className="w-4 h-4 shrink-0 opacity-60"
+                        />
                         <span className="font-body-md text-sm truncate-fname">
                           {f.editable.title || f.file.name}
                         </span>
@@ -249,7 +249,7 @@ export default function App() {
                         title="Fjern fra listen"
                         className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-lg text-secondary opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white hover:text-error transition-all"
                       >
-                        <span className="material-symbols-outlined text-base leading-none block">close</span>
+                        <Icon name="close" className="w-4 h-4" />
                       </button>
                     </li>
                   ))}

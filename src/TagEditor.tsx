@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LoadedFile } from './App';
 import type { CoverArt, EditableTags } from './lib/id3';
 import { buildFilename, PATTERNS, type NamePattern } from './lib/filename';
+import { Icon } from './Icon';
 
 interface Props {
   loaded: LoadedFile;
@@ -70,7 +71,7 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, onChange, on
         </div>
         {loaded.saved && (
           <span className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-fixed/20 text-on-primary-fixed-variant font-label-sm">
-            <span className="material-symbols-outlined text-base">check_circle</span>
+            <Icon name="check_circle" className="w-4 h-4" />
             Gemt
           </span>
         )}
@@ -95,7 +96,7 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, onChange, on
           {coverUrl ? (
             <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
           ) : (
-            <span className="material-symbols-outlined text-slate-400 text-3xl">image</span>
+            <Icon name="image" className="text-slate-400 w-7 h-7" />
           )}
         </div>
         <div className="flex flex-col gap-2">
@@ -159,7 +160,7 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, onChange, on
       <div className="space-y-2">
         {read.carried.length > 0 && (
           <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-surface-container-low">
-            <span className="material-symbols-outlined text-base text-primary mt-0.5">shield</span>
+            <Icon name="shield" className="w-4 h-4 text-primary mt-0.5" />
             <div className="font-body-md text-sm text-secondary">
               <strong className="text-on-surface font-medium">
                 {read.carried.length} andre felter bevares
@@ -170,7 +171,7 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, onChange, on
         )}
         {read.unsupported.length > 0 && (
           <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-error-container/40 border border-error/20">
-            <span className="material-symbols-outlined text-base text-error mt-0.5">warning</span>
+            <Icon name="warning" className="w-4 h-4 text-error mt-0.5" />
             <div className="font-body-md text-sm text-on-surface">
               <strong className="font-medium">
                 {read.unsupported.length} felter kan ikke skrives tilbage
@@ -206,7 +207,7 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, onChange, on
         disabled={busy}
         className="w-full bg-primary-fixed text-on-primary-fixed font-headline-md py-4 rounded-2xl shadow-[0_4px_20px_rgba(156,239,193,0.4)] hover:shadow-[0_6px_24px_rgba(156,239,193,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
       >
-        <span className="material-symbols-outlined">download</span>
+        <Icon name="download" />
         {busy ? 'Skriver…' : 'Gem som ny fil'}
       </button>
     </div>
