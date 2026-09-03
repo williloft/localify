@@ -168,7 +168,7 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="flex-grow flex flex-col items-center px-6 py-16 relative overflow-hidden">
+      <main className="flex-grow flex flex-col items-center justify-center px-6 py-16 relative overflow-hidden">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-primary-fixed/5 rounded-full blur-[120px] -z-10" />
 
         <header className="text-center mb-10 max-w-2xl mx-auto">
@@ -180,7 +180,7 @@ export default function App() {
           </p>
         </header>
 
-        <section className="w-full max-w-5xl">
+        <section className={`w-full ${files.length === 0 ? 'max-w-2xl' : 'max-w-5xl'}`}>
           {files.length === 0 ? (
             <div
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
