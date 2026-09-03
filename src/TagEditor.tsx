@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LoadedFile } from './App';
 import type { CoverArt, EditableTags } from './lib/id3';
+import { buildFilename, PATTERNS, type NamePattern } from './lib/filename';
 
 interface Props {
   loaded: LoadedFile;
   busy: boolean;
+  pattern: NamePattern;
+  onPatternChange: (p: NamePattern) => void;
   onChange: (patch: Partial<LoadedFile>) => void;
   onSave: () => void;
 }
@@ -24,7 +27,7 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function TagEditor({ loaded, busy, onChange, onSave }: Props) {
+export function TagEditor({ loaded, busy, pattern, onPatternChange, onChange, onSave }: Props) {
   const { read, editable, cover, file } = loaded;
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverDrag, setCoverDrag] = useState(false);
@@ -38,6 +41,11 @@ export function TagEditor({ loaded, busy, onChange, onSave }: Props) {
   useEffect(() => {
     return () => { if (coverUrl) URL.revokeObjectURL(coverUrl); };
   }, [coverUrl]);
+
+  const previewName = useMemo(
+    () => buildFilename({ pattern, tags: editable, originalName: file.name }),
+    [pattern, editable, file.name]
+  );
 
   const setField = (key: keyof EditableTags, value: string) =>
     onChange({ editable: { ...editable, [key]: value } });
@@ -171,6 +179,26 @@ export function TagEditor({ loaded, busy, onChange, onSave }: Props) {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-2xl bg-surface-container-low">
+        <label className="flex items-center gap-2 shrink-0">
+          <span className="font-label-sm text-slate-500 uppercase tracking-wider text-[10px]">
+            Filnavn
+          </span>
+          <select
+            value={pattern}
+            onChange={(e) => onPatternChange(e.target.value as NamePattern)}
+            className="bg-white border border-slate-200 rounded-xl font-body-md text-sm px-3 py-1.5 outline-none focus:ring-2 focus:ring-primary-fixed"
+          >
+            {PATTERNS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </label>
+        <span className="font-body-md text-sm text-secondary min-w-0 truncate-fname">
+          Gemmes som <strong className="text-on-surface font-medium">{previewName}</strong>
+        </span>
       </div>
 
       <button
