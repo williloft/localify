@@ -8,10 +8,12 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "tsx test/roundtrip.test.ts && tsx test/filename.test.ts",
-    "fixtures": "node test/make-fixture.mjs"
+    "test": "tsx test/roundtrip.test.ts && tsx test/filename.test.ts && tsx test/mp4.test.ts && tsx test/encode.test.ts",
+    "fixtures": "node test/make-fixtures.mjs",
+    "pretest": "node test/make-fixtures.mjs"
   },
   "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "browser-id3-writer": "^6.4.0",
     "music-metadata": "^11.15.0",
     "react": "^19.2.8",

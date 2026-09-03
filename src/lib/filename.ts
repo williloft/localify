@@ -58,6 +58,8 @@ export interface BuildNameInput {
   pattern: NamePattern;
   tags: EditableTags;
   originalName: string;
+  /** Overrides the source extension — set when the container is changing. */
+  extension?: string;
 }
 
 /**
@@ -70,8 +72,9 @@ export interface BuildNameInput {
  *    same-name download either stacks up as "(1)" or, if the browser asks and
  *    the user picks replace, silently overwrites the original.
  */
-export function buildFilename({ pattern, tags, originalName }: BuildNameInput): string {
-  const { stem: originalStem, ext } = splitExt(originalName);
+export function buildFilename({ pattern, tags, originalName, extension }: BuildNameInput): string {
+  const { stem: originalStem, ext: sourceExt } = splitExt(originalName);
+  const ext = extension ?? sourceExt;
 
   const title = sanitizeSegment(tags.title);
   const artist = sanitizeSegment(tags.artist);
