@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { readTags, writeTags, type EditableTags, type ReadResult, type CoverArt } from './lib/id3';
+import { buildFilename, type NamePattern } from './lib/filename';
 import { TagEditor } from './TagEditor';
+
+const PATTERN_KEY = 'localify:name-pattern';
+
+/** Reading storage throws in some privacy contexts, so never let it break boot. */
+function storedPattern(): NamePattern {
+  try {
+    const v = localStorage.getItem(PATTERN_KEY);
+    return (v as NamePattern) || 'title-artist';
+  } catch {
+    return 'title-artist';
+  }
+}
 
 export interface LoadedFile {
   id: string;
@@ -23,7 +36,13 @@ export default function App() {
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [pattern, setPatternState] = useState<NamePattern>(storedPattern);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const setPattern = useCallback((next: NamePattern) => {
+    setPatternState(next);
+    try { localStorage.setItem(PATTERN_KEY, next); } catch { /* not fatal */ }
+  }, []);
 
   const active = files.find((f) => f.id === activeId) ?? null;
 
@@ -71,6 +90,24 @@ export default function App() {
     );
   }, [activeId]);
 
+  const removeFile = useCallback((id: string) => {
+    const idx = files.findIndex((f) => f.id === id);
+    const next = files.filter((f) => f.id !== id);
+    setFiles(next);
+    if (id === activeId) {
+      // Prefer the row that slid into this slot, else the one above it.
+      const fallback = next[idx] ?? next[idx - 1] ?? null;
+      setActiveId(fallback ? fallback.id : null);
+    }
+  }, [files, activeId]);
+
+  const clearAll = useCallback(() => {
+    if (files.some((f) => f.dirty) && !confirm('Der er ugemte ændringer. Ryd listen alligevel?')) return;
+    setFiles([]);
+    setActiveId(null);
+    setError('');
+  }, [files]);
+
   const save = useCallback(async () => {
     if (!active) return;
     setBusy(true);
@@ -85,10 +122,11 @@ export default function App() {
       });
       if (failed.length) setError(`Kunne ikke skrive: ${failed.join(', ')}`);
 
-      const name = active.editable.title
-        ? `${active.editable.title}${active.editable.artist ? ` - ${active.editable.artist}` : ''}.mp3`
-        : active.file.name;
-      const safe = name.replace(/[<>:"/\\|?*]/g, '_').slice(0, 200);
+      const safe = buildFilename({
+        pattern,
+        tags: active.editable,
+        originalName: active.file.name,
+      });
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -106,7 +144,7 @@ export default function App() {
     } finally {
       setBusy(false);
     }
-  }, [active]);
+  }, [active, pattern]);
 
   // Warn before losing unsaved edits.
   useEffect(() => {
@@ -127,10 +165,14 @@ export default function App() {
             </span>
             <span>Localify</span>
           </a>
-          <span className="hidden sm:flex items-center gap-2 font-label-sm text-secondary">
-            <span className="material-symbols-outlined text-base text-primary">lock</span>
-            Alt sker i din browser
-          </span>
+          <a
+            href="https://github.com/williloft/localify"
+            target="_blank"
+            rel="noreferrer"
+            className="font-label-sm text-secondary hover:text-on-surface transition-colors"
+          >
+            GitHub
+          </a>
         </div>
       </nav>
 
@@ -142,8 +184,7 @@ export default function App() {
             Ret metadata i dine MP3'er
           </h1>
           <p className="font-body-lg text-secondary max-w-lg mx-auto">
-            Ingen upload, ingen server, ingen konto. Filerne forlader aldrig din maskine —
-            og felter du ikke rører, bliver hvor de er.
+            Alt sker i din browser. Felter du ikke rører, bliver hvor de er.
           </p>
         </header>
 
@@ -175,20 +216,29 @@ export default function App() {
                   <span className="font-label-md uppercase tracking-widest text-on-surface-variant text-xs">
                     Filer ({files.length})
                   </span>
-                  <button
-                    onClick={() => inputRef.current?.click()}
-                    className="text-primary hover:text-on-primary-fixed-variant transition-colors"
-                    title="Tilføj flere"
-                  >
-                    <span className="material-symbols-outlined text-xl">add</span>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={clearAll}
+                      className="px-2 py-0.5 rounded-lg font-label-sm text-secondary hover:text-error hover:bg-error-container/40 transition-colors"
+                      title="Ryd hele listen"
+                    >
+                      Ryd
+                    </button>
+                    <button
+                      onClick={() => inputRef.current?.click()}
+                      className="p-0.5 rounded-lg text-primary hover:bg-primary-fixed/20 transition-colors"
+                      title="Tilføj flere"
+                    >
+                      <span className="material-symbols-outlined text-xl leading-none">add</span>
+                    </button>
+                  </div>
                 </div>
                 <ul className="space-y-1 max-h-[420px] overflow-y-auto">
                   {files.map((f) => (
-                    <li key={f.id}>
+                    <li key={f.id} className="group relative">
                       <button
                         onClick={() => setActiveId(f.id)}
-                        className={`w-full text-left px-3 py-2.5 rounded-xl transition-colors flex items-center gap-2 ${
+                        className={`w-full text-left pl-3 pr-9 py-2.5 rounded-xl transition-colors flex items-center gap-2 ${
                           f.id === activeId
                             ? 'bg-primary-fixed/20 text-on-surface'
                             : 'hover:bg-surface-container-low text-secondary'
@@ -201,6 +251,14 @@ export default function App() {
                           {f.editable.title || f.file.name}
                         </span>
                       </button>
+                      <button
+                        onClick={() => removeFile(f.id)}
+                        aria-label={`Fjern ${f.editable.title || f.file.name} fra listen`}
+                        title="Fjern fra listen"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-lg text-secondary opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white hover:text-error transition-all"
+                      >
+                        <span className="material-symbols-outlined text-base leading-none block">close</span>
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -212,6 +270,8 @@ export default function App() {
                     key={active.id}
                     loaded={active}
                     busy={busy}
+                    pattern={pattern}
+                    onPatternChange={setPattern}
                     onChange={updateActive}
                     onSave={save}
                   />
@@ -238,7 +298,14 @@ export default function App() {
       </main>
 
       <footer className="border-t border-slate-100 py-6 text-center font-body-md text-sm text-secondary">
-        Ingen filer forlader din browser. Der er ingen server at sende dem til.
+        <a
+          href="https://github.com/williloft/localify"
+          target="_blank"
+          rel="noreferrer"
+          className="hover:text-on-surface transition-colors"
+        >
+          Kildekode på GitHub
+        </a>
       </footer>
     </div>
   );
