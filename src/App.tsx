@@ -158,20 +158,12 @@ export default function App() {
   return (
     <div className="light min-h-screen flex flex-col">
       <nav className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-100 shadow-[0_4px_20px_rgba(29,29,31,0.04)] h-16 flex items-center">
-        <div className="max-w-[1280px] mx-auto w-full flex items-center justify-between px-6">
+        <div className="max-w-[1280px] mx-auto w-full flex items-center px-6">
           <a className="text-xl font-bold tracking-tighter text-slate-900 flex items-center gap-2" href="/">
             <span className="w-8 h-8 bg-primary-fixed text-on-primary-fixed flex items-center justify-center rounded-lg font-extrabold">
               L
             </span>
             <span>Localify</span>
-          </a>
-          <a
-            href="https://github.com/williloft/localify"
-            target="_blank"
-            rel="noreferrer"
-            className="font-label-sm text-secondary hover:text-on-surface transition-colors"
-          >
-            GitHub
           </a>
         </div>
       </nav>
@@ -296,17 +288,6 @@ export default function App() {
           onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ''; }}
         />
       </main>
-
-      <footer className="border-t border-slate-100 py-6 text-center font-body-md text-sm text-secondary">
-        <a
-          href="https://github.com/williloft/localify"
-          target="_blank"
-          rel="noreferrer"
-          className="hover:text-on-surface transition-colors"
-        >
-          Kildekode på GitHub
-        </a>
-      </footer>
     </div>
   );
 }
