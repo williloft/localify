@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { readTags, writeTags, type EditableTags, type ReadResult, type CoverArt } from './lib/id3';
+import {
+  readFileTags,
+  saveFile,
+  acceptsFile,
+  type AudioFormat,
+  type EditableTags,
+  type FileTags,
+  type CoverArt,
+} from './lib/tags';
 import { buildFilename, type NamePattern } from './lib/filename';
 import { TagEditor } from './TagEditor';
 import { Icon } from './Icon';
@@ -19,11 +27,13 @@ function storedPattern(): NamePattern {
 export interface LoadedFile {
   id: string;
   file: File;
-  read: ReadResult;
+  read: FileTags;
   editable: EditableTags;
   cover: CoverArt | null;
   dirty: boolean;
   saved: boolean;
+  /** What the download should be. MP3 by default, including for M4A sources. */
+  outputFormat: AudioFormat;
 }
 
 /** Read a File into an ArrayBuffer without keeping it alive any longer than needed. */
@@ -36,6 +46,7 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [pattern, setPatternState] = useState<NamePattern>(storedPattern);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -48,11 +59,9 @@ export default function App() {
   const active = files.find((f) => f.id === activeId) ?? null;
 
   const addFiles = useCallback(async (incoming: FileList | File[]) => {
-    const list = Array.from(incoming).filter(
-      (f) => f.type === 'audio/mpeg' || f.name.toLowerCase().endsWith('.mp3')
-    );
+    const list = Array.from(incoming).filter((f) => acceptsFile(f.name));
     const rejected = Array.from(incoming).length - list.length;
-    setError(rejected > 0 ? `${rejected} fil(er) sprunget over — kun MP3 understøttes.` : '');
+    setError(rejected > 0 ? `${rejected} fil(er) sprunget over — kun MP3 og M4A understøttes.` : '');
     if (list.length === 0) return;
 
     setBusy(true);
@@ -62,7 +71,7 @@ export default function App() {
         // Buffer is scoped to this iteration so a large batch doesn't pin
         // every file's bytes in memory at once.
         const buf = await bufferOf(file);
-        const read = await readTags(buf);
+        const read = await readFileTags(buf);
         loaded.push({
           id: `${file.name}-${file.size}-${file.lastModified}`,
           file,
@@ -71,6 +80,9 @@ export default function App() {
           cover: read.cover,
           dirty: false,
           saved: false,
+          // MP3 by default whatever came in: it is the format that plays
+          // everywhere, and the one Spotify's local files actually accept.
+          outputFormat: 'mp3',
         });
       } catch {
         setError((e) => `${e} Kunne ikke læse "${file.name}".`.trim());
@@ -113,20 +125,31 @@ export default function App() {
     if (!active) return;
     setBusy(true);
     setError('');
+    setProgress(null);
     try {
       const buf = await bufferOf(active.file);
-      const { blob, failed } = writeTags({
+      const { blob, failed, reencoded, dropped, extension } = await saveFile({
         buffer: buf,
+        format: active.read.format,
         editable: active.editable,
         cover: active.cover,
         carried: active.read.carried,
+        outputFormat: active.outputFormat,
+        onProgress: setProgress,
       });
-      if (failed.length) setError(`Kunne ikke skrive: ${failed.join(', ')}`);
+
+      const notes: string[] = [];
+      if (failed.length) notes.push(`Kunne ikke skrive: ${failed.join(', ')}`);
+      if (reencoded && dropped.length) {
+        notes.push(`Felter uden MP3-modstykke gik tabt: ${dropped.join(', ')}`);
+      }
+      if (notes.length) setError(notes.join('. '));
 
       const safe = buildFilename({
         pattern,
         tags: active.editable,
         originalName: active.file.name,
+        extension,
       });
 
       const url = URL.createObjectURL(blob);
@@ -134,7 +157,6 @@ export default function App() {
       a.href = url;
       a.download = safe;
       a.click();
-      // Revoke on the next tick so the download has taken the handle.
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
 
       setFiles((prev) =>
@@ -144,6 +166,7 @@ export default function App() {
       setError(e instanceof Error ? e.message : 'Noget gik galt under skrivning.');
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }, [active, pattern]);
 
@@ -174,7 +197,7 @@ export default function App() {
 
         <header className="text-center mb-10 max-w-2xl mx-auto">
           <h1 className="font-display text-display text-on-background mb-4">
-            Ret metadata i dine MP3'er
+            Ret metadata i din musik
           </h1>
           <p className="font-body-lg text-secondary max-w-lg mx-auto">
             Alt sker i din browser. Felter du ikke rører, bliver hvor de er.
@@ -196,7 +219,7 @@ export default function App() {
             >
               <Icon name="music_note" className="w-12 h-12 text-slate-300 mb-4" />
               <p className="font-headline-md text-on-surface mb-1">
-                {busy ? 'Læser filer…' : 'Træk dine MP3-filer herind'}
+                {busy ? 'Læser filer…' : 'Træk dine musikfiler herind'}
               </p>
               <p className="font-body-md text-secondary">eller klik for at vælge</p>
             </div>
@@ -264,6 +287,7 @@ export default function App() {
                     busy={busy}
                     pattern={pattern}
                     onPatternChange={setPattern}
+                    progress={progress}
                     onChange={updateActive}
                     onSave={save}
                   />
@@ -282,7 +306,7 @@ export default function App() {
         <input
           ref={inputRef}
           type="file"
-          accept="audio/mpeg,.mp3"
+          accept="audio/mpeg,audio/mp4,.mp3,.m4a"
           multiple
           className="hidden"
           onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ''; }}

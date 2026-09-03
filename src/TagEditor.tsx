@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LoadedFile } from './App';
-import type { CoverArt, EditableTags } from './lib/id3';
+import type { AudioFormat, CoverArt, EditableTags } from './lib/tags';
+import { mapM4aToId3 } from './lib/tags';
 import { buildFilename, PATTERNS, type NamePattern } from './lib/filename';
 import { Icon } from './Icon';
 
@@ -9,6 +10,8 @@ interface Props {
   busy: boolean;
   pattern: NamePattern;
   onPatternChange: (p: NamePattern) => void;
+  /** 0..1 while re-encoding, null otherwise. */
+  progress: number | null;
   onChange: (patch: Partial<LoadedFile>) => void;
   onSave: () => void;
 }
@@ -28,7 +31,7 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function TagEditor({ loaded, busy, pattern, onPatternChange, onChange, onSave }: Props) {
+export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, onChange, onSave }: Props) {
   const { read, editable, cover, file } = loaded;
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverDrag, setCoverDrag] = useState(false);
@@ -43,10 +46,23 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, onChange, on
     return () => { if (coverUrl) URL.revokeObjectURL(coverUrl); };
   }, [coverUrl]);
 
+  const converting = read.format === 'm4a' && loaded.outputFormat === 'mp3';
+
   const previewName = useMemo(
-    () => buildFilename({ pattern, tags: editable, originalName: file.name }),
-    [pattern, editable, file.name]
+    () => buildFilename({
+      pattern,
+      tags: editable,
+      originalName: file.name,
+      extension: loaded.outputFormat === 'mp3' ? '.mp3' : '.m4a',
+    }),
+    [pattern, editable, file.name, loaded.outputFormat]
   );
+
+  // What a conversion would cost, worked out before the user commits to it.
+  const wouldDrop = useMemo(() => {
+    if (!converting || read.carried.format !== 'm4a') return [];
+    return mapM4aToId3(read.carried.items).dropped;
+  }, [converting, read.carried]);
 
   const setField = (key: keyof EditableTags, value: string) =>
     onChange({ editable: { ...editable, [key]: value } });
@@ -158,14 +174,14 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, onChange, on
 
       {/* What happens to everything else — the whole point of the tool. */}
       <div className="space-y-2">
-        {read.carried.length > 0 && (
+        {read.carriedNames.length > 0 && (
           <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-surface-container-low">
             <Icon name="shield" className="w-4 h-4 text-primary mt-0.5" />
             <div className="font-body-md text-sm text-secondary">
               <strong className="text-on-surface font-medium">
-                {read.carried.length} andre felter bevares
+                {read.carriedNames.length} andre felter bevares
               </strong>{' '}
-              uændret: {read.carried.map((c) => c.id).join(', ')}
+              uændret: {read.carriedNames.join(', ')}
             </div>
           </div>
         )}
@@ -181,6 +197,45 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, onChange, on
           </div>
         )}
       </div>
+
+      {read.format === 'm4a' && (
+        <div className="space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-2xl bg-surface-container-low">
+            <label className="flex items-center gap-2 shrink-0">
+              <span className="font-label-sm text-slate-500 uppercase tracking-wider text-[10px]">
+                Gem som
+              </span>
+              <select
+                value={loaded.outputFormat}
+                onChange={(e) => onChange({ outputFormat: e.target.value as AudioFormat })}
+                className="bg-white border border-slate-200 rounded-xl font-body-md text-sm px-3 py-1.5 outline-none focus:ring-2 focus:ring-primary-fixed"
+              >
+                <option value="mp3">MP3 (konverteres)</option>
+                <option value="m4a">M4A (lyden røres ikke)</option>
+              </select>
+            </label>
+            <span className="font-body-md text-sm text-secondary">
+              {converting
+                ? 'Spotify og de fleste afspillere kræver MP3.'
+                : 'Beholder originalens lyd bit for bit.'}
+            </span>
+          </div>
+
+          {converting && (
+            <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-error-container/40 border border-error/20">
+              <Icon name="warning" className="w-4 h-4 text-error mt-0.5" />
+              <div className="font-body-md text-sm text-on-surface">
+                <strong className="font-medium">Lyden kodes om.</strong>{' '}
+                AAC til MP3 er komprimering oven på komprimering, så filen bliver en
+                anelse ringere end originalen. Behold originalen.
+                {wouldDrop.length > 0 && (
+                  <> Felter uden MP3-modstykke går tabt: {wouldDrop.join(', ')}.</>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-2xl bg-surface-container-low">
         <label className="flex items-center gap-2 shrink-0">
@@ -208,7 +263,11 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, onChange, on
         className="w-full bg-primary-fixed text-on-primary-fixed font-headline-md py-4 rounded-2xl shadow-[0_4px_20px_rgba(156,239,193,0.4)] hover:shadow-[0_6px_24px_rgba(156,239,193,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
       >
         <Icon name="download" />
-        {busy ? 'Skriver…' : 'Gem som ny fil'}
+        {busy
+          ? progress !== null
+            ? `Koder om… ${Math.round(progress * 100)}%`
+            : 'Skriver…'
+          : 'Gem som ny fil'}
       </button>
     </div>
   );

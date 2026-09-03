@@ -7,3 +7,5 @@ dist/
 .claude/
 *.tsbuildinfo
 test/fixtures/*.mp3
+test/fixtures/*.m4a
+test/fixtures/encoded.mp3
