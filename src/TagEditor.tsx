@@ -3,6 +3,7 @@ import type { LoadedFile } from './App';
 import type { AudioFormat, CoverArt, EditableTags } from './lib/tags';
 import { mapM4aToId3 } from './lib/tags';
 import { buildFilename, PATTERNS, type NamePattern } from './lib/filename';
+import { fieldLabels, plural } from './lib/fieldLabels';
 import { Icon } from './Icon';
 
 interface Props {
@@ -12,6 +13,8 @@ interface Props {
   onPatternChange: (p: NamePattern) => void;
   /** 0..1 while re-encoding, null otherwise. */
   progress: number | null;
+  /** Problems from the last save of this file, or ''. */
+  saveNote: string;
   onChange: (patch: Partial<LoadedFile>) => void;
   onSave: () => void;
 }
@@ -31,7 +34,7 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, onChange, onSave }: Props) {
+export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, saveNote, onChange, onSave }: Props) {
   const { read, editable, cover, file } = loaded;
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverDrag, setCoverDrag] = useState(false);
@@ -78,24 +81,28 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, on
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4 pb-6 border-b border-slate-100">
         <div className="min-w-0">
-          <h2 className="font-headline-md text-on-surface truncate-fname">{file.name}</h2>
+          <h2 className="font-headline-md text-on-surface truncate-fname" title={file.name}>{file.name}</h2>
           <p className="font-label-sm text-secondary font-normal mt-1">
             {formatBytes(file.size)}
             {read.durationSec ? ` · ${Math.round(read.durationSec)} sek` : ''}
             {` · ${read.sourceVersion}`}
           </p>
         </div>
-        {loaded.saved && (
-          <span className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-fixed/20 text-on-primary-fixed-variant font-label-sm">
-            <Icon name="check_circle" className="w-4 h-4" />
-            Gemt
-          </span>
-        )}
+        <div role="status" className="shrink-0">
+          {loaded.saved && (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-fixed/20 text-on-primary-fixed-variant font-label-sm">
+              <Icon name="check_circle" className="w-4 h-4" />
+              Gemt
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Cover */}
       <div className="flex items-center gap-6">
-        <div
+        <button
+          type="button"
+          aria-label={cover ? 'Udskift coverbillede' : 'Vælg coverbillede'}
           onDragOver={(e) => { e.preventDefault(); setCoverDrag(true); }}
           onDragLeave={() => setCoverDrag(false)}
           onDrop={(e) => {
@@ -105,17 +112,17 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, on
             if (f) void setCoverFile(f);
           }}
           onClick={() => coverInputRef.current?.click()}
-          className={`w-24 h-24 shrink-0 bg-surface-container-low rounded-2xl flex items-center justify-center border border-dashed overflow-hidden cursor-pointer transition-all ${
+          className={`w-24 h-24 shrink-0 bg-surface-container-low rounded-2xl flex items-center justify-center border border-dashed overflow-hidden cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
             coverDrag ? 'border-primary-fixed bg-primary-fixed/5' : 'border-slate-300'
           }`}
         >
           {coverUrl ? (
-            <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
+            <img src={coverUrl} alt="" width={96} height={96} className="w-full h-full object-cover" />
           ) : (
             <Icon name="image" className="text-slate-400 w-7 h-7" />
           )}
-        </div>
-        <div className="flex flex-col gap-2">
+        </button>
+        <div className="flex flex-col gap-2 min-w-0">
           <span className="font-label-md uppercase tracking-widest text-on-surface-variant text-xs">
             Cover
           </span>
@@ -156,7 +163,7 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, on
           <div key={key} className={`flex flex-col gap-1 ${wide ? 'md:col-span-2' : ''}`}>
             <label
               htmlFor={`field-${key}`}
-              className="font-label-sm text-slate-500 uppercase tracking-wider text-[10px] px-1"
+              className="font-label-sm text-on-surface-variant uppercase tracking-wider text-xs px-1"
             >
               {label}
             </label>
@@ -166,7 +173,7 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, on
               value={editable[key]}
               onChange={(e) => setField(key, e.target.value)}
               placeholder={placeholder}
-              className="w-full bg-surface-container-low border-none rounded-xl font-body-md px-4 py-2.5 focus:ring-2 focus:ring-primary-fixed focus:bg-white transition-all outline-none text-on-surface placeholder-slate-400"
+              className="w-full bg-surface-container-low border border-outline rounded-xl font-body-md px-4 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary focus:bg-white transition-colors text-on-surface placeholder:text-slate-500 placeholder:italic"
             />
           </div>
         ))}
@@ -179,9 +186,9 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, on
             <Icon name="shield" className="w-4 h-4 text-primary mt-0.5" />
             <div className="font-body-md text-sm text-secondary">
               <strong className="text-on-surface font-medium">
-                {read.carriedNames.length} andre felter bevares
+                {plural(read.carriedNames.length, 'andet felt bevares', 'andre felter bevares')}
               </strong>{' '}
-              uændret: {read.carriedNames.join(', ')}
+              uændret: <span title={read.carriedNames.join(', ')}>{fieldLabels(read.carriedNames)}</span>
             </div>
           </div>
         )}
@@ -190,9 +197,9 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, on
             <Icon name="warning" className="w-4 h-4 text-error mt-0.5" />
             <div className="font-body-md text-sm text-on-surface">
               <strong className="font-medium">
-                {read.unsupported.length} felter kan ikke skrives tilbage
+                {plural(read.unsupported.length, 'felt kan', 'felter kan')} ikke skrives tilbage
               </strong>{' '}
-              og går tabt hvis du gemmer: {read.unsupported.join(', ')}
+              og går tabt, hvis du gemmer: <span title={read.unsupported.join(', ')}>{fieldLabels(read.unsupported)}</span>
             </div>
           </div>
         )}
@@ -201,14 +208,14 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, on
       {read.format === 'm4a' && (
         <div className="space-y-2">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-2xl bg-surface-container-low">
-            <label className="flex items-center gap-2 shrink-0">
-              <span className="font-label-sm text-slate-500 uppercase tracking-wider text-[10px]">
+            <label className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 sm:shrink-0">
+              <span className="font-label-sm text-on-surface-variant uppercase tracking-wider text-xs">
                 Gem som
               </span>
               <select
                 value={loaded.outputFormat}
                 onChange={(e) => onChange({ outputFormat: e.target.value as AudioFormat })}
-                className="bg-white border border-slate-200 rounded-xl font-body-md text-sm px-3 py-1.5 outline-none focus:ring-2 focus:ring-primary-fixed"
+                className="max-w-full min-w-0 bg-white text-on-surface border border-outline rounded-xl font-body-md text-sm px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <option value="mp3">MP3 (konverteres)</option>
                 <option value="m4a">M4A (lyden røres ikke)</option>
@@ -222,15 +229,24 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, on
           </div>
 
           {converting && (
+            <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-surface-container-low">
+              <Icon name="warning" className="w-4 h-4 text-secondary mt-0.5" />
+              <div className="font-body-md text-sm text-secondary">
+                <strong className="text-on-surface font-medium">Lyden kodes om.</strong>{' '}
+                AAC til MP3 er komprimering oven på komprimering, så filen bliver en
+                anelse ringere end originalen. Behold originalen.
+              </div>
+            </div>
+          )}
+
+          {converting && wouldDrop.length > 0 && (
             <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-error-container/40 border border-error/20">
               <Icon name="warning" className="w-4 h-4 text-error mt-0.5" />
               <div className="font-body-md text-sm text-on-surface">
-                <strong className="font-medium">Lyden kodes om.</strong>{' '}
-                AAC til MP3 er komprimering oven på komprimering, så filen bliver en
-                anelse ringere end originalen. Behold originalen.
-                {wouldDrop.length > 0 && (
-                  <> Felter uden MP3-modstykke går tabt: {wouldDrop.join(', ')}.</>
-                )}
+                <strong className="font-medium">
+                  {plural(wouldDrop.length, 'felt har', 'felter har')} intet MP3-modstykke
+                </strong>{' '}
+                og går tabt ved konvertering: <span title={wouldDrop.join(', ')}>{fieldLabels(wouldDrop)}</span>.
               </div>
             </div>
           )}
@@ -238,37 +254,48 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, on
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-2xl bg-surface-container-low">
-        <label className="flex items-center gap-2 shrink-0">
-          <span className="font-label-sm text-slate-500 uppercase tracking-wider text-[10px]">
+        <label className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 sm:shrink-0">
+          <span className="font-label-sm text-on-surface-variant uppercase tracking-wider text-xs">
             Filnavn
           </span>
           <select
             value={pattern}
             onChange={(e) => onPatternChange(e.target.value as NamePattern)}
-            className="bg-white border border-slate-200 rounded-xl font-body-md text-sm px-3 py-1.5 outline-none focus:ring-2 focus:ring-primary-fixed"
+            className="max-w-full min-w-0 bg-white text-on-surface border border-outline rounded-xl font-body-md text-sm px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             {PATTERNS.map((p) => (
               <option key={p.value} value={p.value}>{p.label}</option>
             ))}
           </select>
         </label>
-        <span className="font-body-md text-sm text-secondary min-w-0 truncate-fname">
+        <span className="font-body-md text-sm text-secondary min-w-0 truncate-fname" title={previewName}>
           Gemmes som <strong className="text-on-surface font-medium">{previewName}</strong>
         </span>
       </div>
 
-      <button
-        onClick={onSave}
-        disabled={busy}
-        className="w-full bg-primary-fixed text-on-primary-fixed font-headline-md py-4 rounded-2xl shadow-[0_4px_20px_rgba(156,239,193,0.4)] hover:shadow-[0_6px_24px_rgba(156,239,193,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
-      >
-        <Icon name="download" />
-        {busy
-          ? progress !== null
-            ? `Koder om… ${Math.round(progress * 100)}%`
-            : 'Skriver…'
-          : 'Gem som ny fil'}
-      </button>
+      <div className="space-y-3">
+        <button
+          onClick={onSave}
+          disabled={busy}
+          className="w-full bg-primary-fixed text-on-primary-fixed font-headline-md py-4 rounded-2xl shadow-[0_4px_20px_rgba(156,239,193,0.4)] hover:shadow-[0_6px_24px_rgba(156,239,193,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-[box-shadow,transform] duration-200 motion-reduce:transition-none motion-reduce:hover:translate-y-0 flex items-center justify-center gap-2 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
+        >
+          <Icon name="download" />
+          {busy
+            ? progress !== null
+              ? `Koder om… ${Math.round(progress * 100)}%`
+              : 'Skriver…'
+            : 'Gem som ny fil'}
+        </button>
+
+        {/* Next to the button that caused it, so it lands in view on a phone. */}
+        <div role="alert">
+          {saveNote && (
+            <div className="px-4 py-3 rounded-2xl bg-error-container border border-error/30 text-sm text-error font-body-md">
+              {saveNote}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

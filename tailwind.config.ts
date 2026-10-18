@@ -5,13 +5,13 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        "display": ["Inter", "sans-serif"],
-        "body-lg": ["Inter", "sans-serif"],
-        "body-md": ["Inter", "sans-serif"],
-        "label-md": ["Inter", "sans-serif"],
-        "label-sm": ["Inter", "sans-serif"],
-        "headline-md": ["Inter", "sans-serif"],
-        "headline-lg": ["Inter", "sans-serif"],
+        "display": ["Inter Variable", "sans-serif"],
+        "body-lg": ["Inter Variable", "sans-serif"],
+        "body-md": ["Inter Variable", "sans-serif"],
+        "label-md": ["Inter Variable", "sans-serif"],
+        "label-sm": ["Inter Variable", "sans-serif"],
+        "headline-md": ["Inter Variable", "sans-serif"],
+        "headline-lg": ["Inter Variable", "sans-serif"],
       },
       fontSize: {
         "body-lg": ["18px", { lineHeight: "1.6", letterSpacing: "0", fontWeight: "400" }],
