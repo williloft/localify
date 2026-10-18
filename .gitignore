@@ -9,3 +9,6 @@ dist/
 test/fixtures/*.mp3
 test/fixtures/*.m4a
 test/fixtures/encoded.mp3
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+.playwright/
