@@ -211,7 +211,8 @@ export default function App() {
               e.preventDefault();
               window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
             }}
-            className="font-display text-xl font-extrabold tracking-[-0.03em] text-brand"
+            // Keyboard focus shows as an underline under the name instead of a box around it.
+            className="font-display text-xl font-extrabold tracking-[-0.03em] text-brand decoration-2 underline-offset-[6px] focus-visible:outline-none focus-visible:underline"
           >
             Localify
           </a>
