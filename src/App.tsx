@@ -48,6 +48,18 @@ async function bufferOf(file: File): Promise<ArrayBuffer> {
   return await file.arrayBuffer();
 }
 
+/** What "Gem alle" reports when it is done: what was left out, and what went in with a warning. */
+interface BatchNote {
+  stopped?: boolean;
+  /** A whole-batch failure, such as a zip too large for the browser. */
+  failed?: string;
+  skipped: string[];
+  warnings: string[];
+}
+
+/** Lists in the batch note show this many lines before "+N mere". */
+const NOTE_LINES = 5;
+
 /** Write one file's tags and work out its download name, without downloading it. */
 async function renderFile(
   f: LoadedFile,
@@ -93,7 +105,8 @@ function uniqueName(name: string, used: Set<string>): string {
 /** Named after the album when every file shares one, which is the usual case. */
 function zipName(files: LoadedFile[]): string {
   const albums = new Set(files.map((f) => f.editable.album.trim()).filter(Boolean));
-  const album = albums.size === 1 ? sanitizeSegment([...albums][0]) : '';
+  // Same cap as single files: room for the extension inside the 255-byte name limit.
+  const album = albums.size === 1 ? sanitizeSegment([...albums][0]).slice(0, 180).trimEnd() : '';
   return `${album || 'Localify'}.zip`;
 }
 
@@ -110,7 +123,9 @@ export default function App() {
   const [offerM4a, setOfferM4a] = useState(false);
   /** Progress of "Gem alle", null when idle. */
   const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
-  const [batchNote, setBatchNote] = useState('');
+  const [batchNote, setBatchNote] = useState<BatchNote | null>(null);
+  /** Set by the Stop button; the batch checks it between files. */
+  const stopBatch = useRef(false);
   const [pattern, setPatternState] = useState<NamePattern>(storedPattern);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -169,11 +184,12 @@ export default function App() {
 
   // Latest list and selection, read by the row callbacks below so they can stay
   // stable and the memoized rows skip re-rendering on every keystroke.
-  const latest = useRef({ files, activeId });
-  useEffect(() => { latest.current = { files, activeId }; }, [files, activeId]);
+  const latest = useRef({ files, activeId, batching: false });
+  useEffect(() => { latest.current = { files, activeId, batching: batch !== null }; }, [files, activeId, batch]);
 
   const removeFile = useCallback((id: string) => {
-    const { files: current, activeId: currentActive } = latest.current;
+    const { files: current, activeId: currentActive, batching } = latest.current;
+    if (batching) return;
     const idx = current.findIndex((f) => f.id === id);
     const next = current.filter((f) => f.id !== id);
     setFiles(next);
@@ -199,12 +215,13 @@ export default function App() {
   useEffect(updateListFade, [files.length, updateListFade]);
 
   const clearAll = useCallback(() => {
+    if (latest.current.batching) return;
     if (files.some((f) => f.dirty) && !confirm('Der er ugemte ændringer. Ryd listen alligevel?')) return;
     setFiles([]);
     setActiveId(null);
     setError('');
     setSaveNote('');
-    setBatchNote('');
+    setBatchNote(null);
   }, [files]);
 
   const save = useCallback(async () => {
@@ -232,45 +249,58 @@ export default function App() {
 
   /** Every file in the list, written with its own settings and handed over as one zip. */
   const saveAll = useCallback(async () => {
+    // A snapshot of the objects as they are now. An edit replaces a file's
+    // object, so comparing against this tells which files changed mid-batch.
     const list = latest.current.files;
+    stopBatch.current = false;
     setBusy(true);
-    setBatchNote('');
+    setBatchNote(null);
     const entries: Record<string, Uint8Array> = {};
     const used = new Set<string>();
-    const problems: string[] = [];
-    const savedIds = new Set<string>();
+    const skipped: string[] = [];
+    const warnings: string[] = [];
+    const packed = new Set<LoadedFile>();
 
-    for (let i = 0; i < list.length; i++) {
-      const f = list[i];
-      setBatch({ done: i, total: list.length });
-      try {
-        const { blob, name, notes } = await renderFile(f, pattern);
-        const entry = uniqueName(name, used);
-        entries[entry] = new Uint8Array(await blob.arrayBuffer());
-        savedIds.add(f.id);
-        if (notes.length) problems.push(`${entry}: ${notes.join('. ')}`);
-      } catch (e) {
-        // One file that cannot be written must not cost the user the other eleven.
-        const why = e instanceof DecodeError
-          ? 'browseren kan ikke afkode lyden. Vælg M4A under “Gem som” for den fil, og prøv igen'
-          : e instanceof Error ? e.message : 'kunne ikke skrives';
-        problems.push(`${f.file.name}: ${why}`);
+    try {
+      for (let i = 0; i < list.length; i++) {
+        if (stopBatch.current) {
+          setBatchNote({ stopped: true, skipped: [], warnings: [] });
+          return;
+        }
+        const f = list[i];
+        setBatch({ done: i, total: list.length });
+        try {
+          const { blob, name, notes } = await renderFile(f, pattern);
+          const entry = uniqueName(name, used);
+          entries[entry] = new Uint8Array(await blob.arrayBuffer());
+          packed.add(f);
+          if (notes.length) warnings.push(`${entry}: ${notes.join('. ')}`);
+        } catch (e) {
+          // One file that cannot be written must not cost the user the other eleven.
+          const why = e instanceof DecodeError
+            ? 'browseren kan ikke afkode lyden. Vælg M4A under “Gem som” for den fil'
+            : e instanceof Error ? e.message : 'kunne ikke skrives';
+          skipped.push(`${f.file.name}: ${why}`);
+        }
       }
-    }
 
-    if (savedIds.size) {
-      // Audio is already compressed, so store it as it is instead of spending time deflating it.
-      download(new Blob([zipSync(entries, { level: 0 }) as BlobPart], { type: 'application/zip' }), zipName(list));
-      setFiles((prev) => prev.map((f) => (savedIds.has(f.id) ? { ...f, dirty: false, saved: true } : f)));
+      if (packed.size) {
+        // Audio is already compressed, so store it as it is instead of spending time deflating it.
+        download(new Blob([zipSync(entries, { level: 0 }) as BlobPart], { type: 'application/zip' }), zipName(list));
+        // Only files still identical to what went into the zip count as saved.
+        setFiles((prev) => prev.map((f) => (packed.has(f) ? { ...f, dirty: false, saved: true } : f)));
+      }
+      setBatchNote(skipped.length || warnings.length ? { skipped, warnings } : null);
+    } catch {
+      setBatchNote({
+        failed: 'Zip-filen blev for stor til browseren. Gem færre filer ad gangen, eller gem dem enkeltvis.',
+        skipped: [],
+        warnings: [],
+      });
+    } finally {
+      setBatch(null);
+      setBusy(false);
     }
-    const skipped = list.length - savedIds.size;
-    setBatchNote(
-      problems.length
-        ? `${skipped ? `${plural(skipped, 'fil', 'filer')} kom ikke med. ` : ''}${problems.join(' · ')}.`
-        : ''
-    );
-    setBatch(null);
-    setBusy(false);
   }, [pattern]);
 
   // Warn before losing unsaved edits.
@@ -289,16 +319,18 @@ export default function App() {
     setSaveNote(f.saveNote ?? '');
   }, []);
 
-  const pick = () => inputRef.current?.click();
+  const pick = () => { if (!locked) inputRef.current?.click(); };
 
   /** Dropping files works on the empty sleeve and on the track list alike. */
   const dropHandlers = {
     onDragOver: (e: DragEvent) => { e.preventDefault(); setDragOver(true); },
     onDragLeave: () => setDragOver(false),
-    onDrop: (e: DragEvent) => { e.preventDefault(); setDragOver(false); void addFiles(e.dataTransfer.files); },
+    onDrop: (e: DragEvent) => { e.preventDefault(); setDragOver(false); if (!locked) void addFiles(e.dataTransfer.files); },
   };
 
   const empty = files.length === 0;
+  /** While "Gem alle" runs, the list is locked so the zip matches what is on screen. */
+  const locked = batch !== null;
 
   return (
     <div className="min-h-dvh flex flex-col">
@@ -328,7 +360,8 @@ export default function App() {
             <button
               type="button"
               onClick={pick}
-              className="ml-1 inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full bg-brand px-4 sm:pl-3 font-display text-sm font-semibold text-white shadow-lip transition-[transform,box-shadow] duration-150 hover:-translate-y-px hover:shadow-lip-hover active:translate-y-[2px] active:shadow-lip-pressed motion-reduce:transition-none"
+              disabled={locked}
+              className="ml-1 disabled:opacity-60 disabled:pointer-events-none inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full bg-brand px-4 sm:pl-3 font-display text-sm font-semibold text-white shadow-lip transition-[transform,box-shadow] duration-150 hover:-translate-y-px hover:shadow-lip-hover active:translate-y-[2px] active:shadow-lip-pressed motion-reduce:transition-none"
             >
               <Icon name="add" className="hidden sm:block w-4 h-4" />
               {empty ? 'Vælg filer' : 'Tilføj'}
@@ -445,15 +478,17 @@ export default function App() {
                   <div className="flex items-center gap-1 -mr-1">
                     <button
                       onClick={clearAll}
-                      className="h-9 px-3 rounded-full text-sm text-ink-dim hover:text-danger hover:bg-danger-tint transition-colors"
+                      disabled={locked}
+                      className="h-9 px-3 rounded-full disabled:opacity-40 disabled:pointer-events-none text-sm text-ink-dim hover:text-danger hover:bg-danger-tint transition-colors"
                     >
                       Ryd
                     </button>
                     <button
                       onClick={pick}
+                      disabled={locked}
                       aria-label="Tilføj flere filer"
                       title="Tilføj flere filer"
-                      className="w-9 h-9 flex items-center justify-center rounded-full text-brand hover:bg-brand-tint transition-colors"
+                      className="w-9 h-9 flex items-center justify-center rounded-full text-brand hover:bg-brand-tint transition-colors disabled:opacity-40 disabled:pointer-events-none"
                     >
                       <Icon name="add" className="w-5 h-5" />
                     </button>
@@ -475,32 +510,44 @@ export default function App() {
                       active={f.id === activeId}
                       onSelect={selectFile}
                       onRemove={removeFile}
+                      locked={locked}
                     />
                   ))}
                 </ol>
 
                 {files.length > 1 && (
                   <div className="mt-3 pt-4 border-t border-line">
-                    <button
-                      type="button"
-                      onClick={() => void saveAll()}
-                      disabled={busy}
-                      className="w-full inline-flex items-center justify-center gap-2 rounded-full border-2 border-brand bg-surface px-4 py-2.5 font-display font-semibold text-brand transition-colors hover:bg-brand-tint disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      <Icon name="download" className="w-5 h-5" />
-                      <span className="tabular-nums">
-                        {batch ? `Gemmer ${formatNumber(batch.done + 1)} af ${formatNumber(batch.total)}…` : 'Gem alle'}
-                      </span>
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void saveAll()}
+                        disabled={busy}
+                        className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-full border-2 border-brand bg-surface px-4 py-2.5 font-display font-semibold text-brand transition-colors hover:bg-brand-tint disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="download" className="w-5 h-5" />
+                        <span className="tabular-nums truncate-fname">
+                          {batch ? `Gemmer ${formatNumber(batch.done + 1)} af ${formatNumber(batch.total)}…` : 'Gem alle'}
+                        </span>
+                      </button>
+                      {batch && (
+                        <button
+                          type="button"
+                          onClick={() => { stopBatch.current = true; }}
+                          className="shrink-0 rounded-full border-2 border-line bg-surface px-4 font-display font-semibold text-ink hover:border-ink transition-colors"
+                        >
+                          Stop
+                        </button>
+                      )}
+                    </div>
                     <p className="mt-2 text-center text-xs text-ink-dim">
                       {formatNumber(files.length)} filer i én zip-fil
                     </p>
+                    {/* Progress for screen readers, announced in steps so 1,000 files don't mean 1,000 announcements. */}
+                    <p role="status" className="sr-only">
+                      {batch ? `Gemmer ${formatNumber(announced(batch))} af ${formatNumber(batch.total)}` : ''}
+                    </p>
                     <div role="alert">
-                      {batchNote && (
-                        <p className="mt-3 rounded-field border border-danger/30 bg-danger-tint px-3 py-2.5 text-sm text-danger break-words">
-                          {batchNote}
-                        </p>
-                      )}
+                      {batchNote && <BatchNoteView note={batchNote} />}
                     </div>
                   </div>
                 )}
@@ -568,10 +615,12 @@ interface TrackRowProps {
   active: boolean;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
+  /** True while "Gem alle" runs: the row can be viewed but not removed. */
+  locked: boolean;
 }
 
 /** One line of the track list. Memoized: typing in the editor only re-renders the active row. */
-const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSelect, onRemove }: TrackRowProps) {
+const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSelect, onRemove, locked }: TrackRowProps) {
   return (
     <li className="group relative">
       <button
@@ -607,6 +656,7 @@ const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSelect, o
       </button>
       <button
         onClick={() => onRemove(f.id)}
+        disabled={locked}
         aria-label={`Fjern ${f.editable.title || f.file.name} fra listen`}
         title="Fjern fra listen"
         className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full text-ink-dim hover:bg-surface hover:text-danger transition-[color,background-color,opacity] [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
@@ -616,3 +666,39 @@ const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSelect, o
     </li>
       );
 });
+
+/** The progress figure to announce: every file for short batches, every tenth of the way for long ones. */
+function announced({ done, total }: { done: number; total: number }): number {
+  const step = Math.max(1, Math.ceil(total / 10));
+  return Math.max(1, Math.floor((done + 1) / step) * step);
+}
+
+function NoteList({ title, lines }: { title: string; lines: string[] }) {
+  const more = lines.length - NOTE_LINES;
+  return (
+    <div>
+      <p className="font-semibold">{title}</p>
+      <ul className="mt-1 space-y-1 list-disc pl-5">
+        {lines.slice(0, NOTE_LINES).map((l) => <li key={l}>{l}</li>)}
+        {more > 0 && <li className="list-none -ml-5">og {plural(more, 'fil mere', 'filer mere')}.</li>}
+      </ul>
+    </div>
+  );
+}
+
+function BatchNoteView({ note }: { note: BatchNote }) {
+  if (note.stopped) {
+    return <p className="mt-3 rounded-field border border-line bg-sunken px-3 py-2.5 text-sm text-ink">Stoppet. Der blev ikke gemt noget.</p>;
+  }
+  return (
+    <div className="mt-3 space-y-3 rounded-field border border-danger/30 bg-danger-tint px-3 py-2.5 text-sm text-danger break-words">
+      {note.failed && <p>{note.failed}</p>}
+      {note.skipped.length > 0 && (
+        <NoteList title={`${plural(note.skipped.length, 'fil kom', 'filer kom')} ikke med:`} lines={note.skipped} />
+      )}
+      {note.warnings.length > 0 && (
+        <NoteList title={`${plural(note.warnings.length, 'fil er gemt', 'filer er gemt')} med en advarsel:`} lines={note.warnings} />
+      )}
+    </div>
+  );
+}
