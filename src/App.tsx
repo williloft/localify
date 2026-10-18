@@ -202,13 +202,36 @@ export default function App() {
     <div className="min-h-dvh flex flex-col">
       <a href="#main" className="skip-link">Spring til indhold</a>
 
-      <header className="border-b border-line">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <a href="/" className="font-display text-xl font-extrabold tracking-[-0.03em] text-brand">
+      <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur-md">
+        <nav aria-label="Hovedmenu" className="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          <a
+            href="/"
+            onClick={(e) => {
+              // Already here: go to the top instead of reloading, which would drop the loaded files.
+              e.preventDefault();
+              window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+            }}
+            className="font-display text-xl font-extrabold tracking-[-0.03em] text-brand"
+          >
             Localify
           </a>
-          <p className="text-sm text-ink-dim">Ingen upload. Ingen konto.</p>
-        </div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <a href="#om" className="hidden sm:inline-flex h-10 items-center rounded-full px-3 text-sm font-medium text-ink-dim hover:text-ink hover:bg-sunken transition-colors">
+              Sådan virker det
+            </a>
+            <a href="#sporgsmal" className="inline-flex h-10 items-center whitespace-nowrap rounded-full px-2.5 sm:px-3 text-sm font-medium text-ink-dim hover:text-ink hover:bg-sunken transition-colors">
+              Spørgsmål
+            </a>
+            <button
+              type="button"
+              onClick={pick}
+              className="ml-1 inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full bg-brand px-4 sm:pl-3 font-display text-sm font-semibold text-white shadow-lip transition-[transform,box-shadow] duration-150 hover:-translate-y-px hover:shadow-lip-hover active:translate-y-[2px] active:shadow-lip-pressed motion-reduce:transition-none"
+            >
+              <Icon name="add" className="hidden sm:block w-4 h-4" />
+              {empty ? 'Vælg filer' : 'Tilføj'}
+            </button>
+          </div>
+        </nav>
       </header>
 
       <main id="main" className="flex-grow">

@@ -44,7 +44,7 @@ const FAQ: { q: string; a: string }[] = [
 
 export function About() {
   return (
-    <section aria-labelledby="about-title" className="border-t border-line bg-sunken/60">
+    <section id="om" aria-labelledby="about-title" className="scroll-mt-16 border-t border-line bg-sunken/60">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 py-16 sm:py-24 grid gap-14 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
         <div>
           <p className="eyebrow text-ink-dim">Liner notes</p>
@@ -76,7 +76,7 @@ export function About() {
           </ol>
 
           <div>
-            <h3 className="eyebrow text-ink-dim">Spørgsmål</h3>
+            <h3 id="sporgsmal" className="eyebrow text-ink-dim scroll-mt-24">Spørgsmål</h3>
             <div className="mt-4 border-t border-line">
               {FAQ.map((f) => (
                 <details key={f.q} className="group border-b border-line">
