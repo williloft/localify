@@ -8,9 +8,10 @@ import {
   type FileTags,
   type CoverArt,
 } from './lib/tags';
-import { buildFilename, type NamePattern } from './lib/filename';
+import { zipSync } from 'fflate';
+import { buildFilename, sanitizeSegment, type NamePattern } from './lib/filename';
 import { DecodeError } from './lib/transcode';
-import { fieldLabels, formatNumber, skippedMessage } from './lib/fieldLabels';
+import { fieldLabels, formatNumber, plural, skippedMessage } from './lib/fieldLabels';
 import { TagEditor } from './TagEditor';
 import { About } from './About';
 import { Icon } from './Icon';
@@ -47,6 +48,55 @@ async function bufferOf(file: File): Promise<ArrayBuffer> {
   return await file.arrayBuffer();
 }
 
+/** Write one file's tags and work out its download name, without downloading it. */
+async function renderFile(
+  f: LoadedFile,
+  pattern: NamePattern,
+  onProgress?: (p: number) => void
+): Promise<{ blob: Blob; name: string; notes: string[] }> {
+  const { blob, failed, reencoded, dropped, extension } = await saveFile({
+    buffer: await bufferOf(f.file),
+    format: f.read.format,
+    editable: f.editable,
+    cover: f.cover,
+    carried: f.read.carried,
+    outputFormat: f.outputFormat,
+    onProgress,
+  });
+  const notes: string[] = [];
+  if (failed.length) notes.push(`Kunne ikke skrive: ${fieldLabels(failed)}`);
+  if (reencoded && dropped.length) notes.push(`Felter uden MP3-modstykke gik tabt: ${fieldLabels(dropped)}`);
+  const name = buildFilename({ pattern, tags: f.editable, originalName: f.file.name, extension });
+  return { blob, name, notes };
+}
+
+function download(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** "Song.mp3", then "Song (2).mp3": two tracks with the same title must not overwrite each other in the zip. */
+function uniqueName(name: string, used: Set<string>): string {
+  const dot = name.lastIndexOf('.');
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : '';
+  let candidate = name;
+  for (let n = 2; used.has(candidate.toLowerCase()); n++) candidate = `${stem} (${n})${ext}`;
+  used.add(candidate.toLowerCase());
+  return candidate;
+}
+
+/** Named after the album when every file shares one, which is the usual case. */
+function zipName(files: LoadedFile[]): string {
+  const albums = new Set(files.map((f) => f.editable.album.trim()).filter(Boolean));
+  const album = albums.size === 1 ? sanitizeSegment([...albums][0]) : '';
+  return `${album || 'Localify'}.zip`;
+}
+
 export default function App() {
   const [files, setFiles] = useState<LoadedFile[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -58,6 +108,9 @@ export default function App() {
   const [saveNote, setSaveNote] = useState('');
   /** The last save failed only because the browser cannot decode AAC; M4A would work. */
   const [offerM4a, setOfferM4a] = useState(false);
+  /** Progress of "Gem alle", null when idle. */
+  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
+  const [batchNote, setBatchNote] = useState('');
   const [pattern, setPatternState] = useState<NamePattern>(storedPattern);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -151,6 +204,7 @@ export default function App() {
     setActiveId(null);
     setError('');
     setSaveNote('');
+    setBatchNote('');
   }, [files]);
 
   const save = useCallback(async () => {
@@ -160,37 +214,9 @@ export default function App() {
     setOfferM4a(false);
     setProgress(null);
     try {
-      const buf = await bufferOf(active.file);
-      const { blob, failed, reencoded, dropped, extension } = await saveFile({
-        buffer: buf,
-        format: active.read.format,
-        editable: active.editable,
-        cover: active.cover,
-        carried: active.read.carried,
-        outputFormat: active.outputFormat,
-        onProgress: setProgress,
-      });
-
-      const notes: string[] = [];
-      if (failed.length) notes.push(`Kunne ikke skrive: ${fieldLabels(failed)}`);
-      if (reencoded && dropped.length) {
-        notes.push(`Felter uden MP3-modstykke gik tabt: ${fieldLabels(dropped)}`);
-      }
+      const { blob, name, notes } = await renderFile(active, pattern, setProgress);
       if (notes.length) setSaveNote(`${notes.join('. ')}.`);
-
-      const safe = buildFilename({
-        pattern,
-        tags: active.editable,
-        originalName: active.file.name,
-        extension,
-      });
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = safe;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      download(blob, name);
 
       setFiles((prev) =>
         prev.map((f) => (f.id === active.id ? { ...f, dirty: false, saved: true } : f))
@@ -203,6 +229,49 @@ export default function App() {
       setProgress(null);
     }
   }, [active, pattern]);
+
+  /** Every file in the list, written with its own settings and handed over as one zip. */
+  const saveAll = useCallback(async () => {
+    const list = latest.current.files;
+    setBusy(true);
+    setBatchNote('');
+    const entries: Record<string, Uint8Array> = {};
+    const used = new Set<string>();
+    const problems: string[] = [];
+    const savedIds = new Set<string>();
+
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i];
+      setBatch({ done: i, total: list.length });
+      try {
+        const { blob, name, notes } = await renderFile(f, pattern);
+        const entry = uniqueName(name, used);
+        entries[entry] = new Uint8Array(await blob.arrayBuffer());
+        savedIds.add(f.id);
+        if (notes.length) problems.push(`${entry}: ${notes.join('. ')}`);
+      } catch (e) {
+        // One file that cannot be written must not cost the user the other eleven.
+        const why = e instanceof DecodeError
+          ? 'browseren kan ikke afkode lyden. Vælg M4A under “Gem som” for den fil, og prøv igen'
+          : e instanceof Error ? e.message : 'kunne ikke skrives';
+        problems.push(`${f.file.name}: ${why}`);
+      }
+    }
+
+    if (savedIds.size) {
+      // Audio is already compressed, so store it as it is instead of spending time deflating it.
+      download(new Blob([zipSync(entries, { level: 0 }) as BlobPart], { type: 'application/zip' }), zipName(list));
+      setFiles((prev) => prev.map((f) => (savedIds.has(f.id) ? { ...f, dirty: false, saved: true } : f)));
+    }
+    const skipped = list.length - savedIds.size;
+    setBatchNote(
+      problems.length
+        ? `${skipped ? `${plural(skipped, 'fil', 'filer')} kom ikke med. ` : ''}${problems.join(' · ')}.`
+        : ''
+    );
+    setBatch(null);
+    setBusy(false);
+  }, [pattern]);
 
   // Warn before losing unsaved edits.
   useEffect(() => {
@@ -409,6 +478,32 @@ export default function App() {
                     />
                   ))}
                 </ol>
+
+                {files.length > 1 && (
+                  <div className="mt-3 pt-4 border-t border-line">
+                    <button
+                      type="button"
+                      onClick={() => void saveAll()}
+                      disabled={busy}
+                      className="w-full inline-flex items-center justify-center gap-2 rounded-full border-2 border-brand bg-surface px-4 py-2.5 font-display font-semibold text-brand transition-colors hover:bg-brand-tint disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <Icon name="download" className="w-5 h-5" />
+                      <span className="tabular-nums">
+                        {batch ? `Gemmer ${formatNumber(batch.done + 1)} af ${formatNumber(batch.total)}…` : 'Gem alle'}
+                      </span>
+                    </button>
+                    <p className="mt-2 text-center text-xs text-ink-dim">
+                      {formatNumber(files.length)} filer i én zip-fil
+                    </p>
+                    <div role="alert">
+                      {batchNote && (
+                        <p className="mt-3 rounded-field border border-danger/30 bg-danger-tint px-3 py-2.5 text-sm text-danger break-words">
+                          {batchNote}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </aside>
 
               <div className="cut min-w-0 bg-surface shadow-print p-5 sm:p-8">

@@ -38,7 +38,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Kan jeg rette flere filer?',
-    a: 'Ja. Læg dem ind på én gang, og ret dem en ad gangen fra listen. Hver fil gemmes for sig.',
+    a: 'Ja. Læg dem ind på én gang, og ret dem en ad gangen fra listen. Gem dem hver for sig, eller tryk “Gem alle” og få dem samlet i én zip-fil.',
   },
 ];
 
