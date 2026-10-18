@@ -45,12 +45,12 @@ const FAQ: { q: string; a: string }[] = [
 export function About() {
   return (
     <section id="om" aria-labelledby="about-title" className="scroll-mt-16 border-t border-line bg-sunken/60">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-16 sm:py-24 grid gap-14 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-16 sm:py-24 grid grid-cols-[minmax(0,1fr)] gap-14 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
         <div>
           <p className="eyebrow text-ink-dim">Liner notes</p>
           <h2
             id="about-title"
-            className="mt-3 font-display text-4xl sm:text-5xl font-extrabold tracking-[-0.04em] leading-[1.02] text-ink"
+            className="mt-3 font-display text-4xl sm:text-5xl font-extrabold hyphens-auto [overflow-wrap:anywhere] tracking-[-0.04em] leading-[1.02] text-ink"
           >
             Det, der står på bagsiden.
           </h2>

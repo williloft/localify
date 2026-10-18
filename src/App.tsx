@@ -187,6 +187,23 @@ export default function App() {
   const latest = useRef({ files, activeId, batching: false });
   useEffect(() => { latest.current = { files, activeId, batching: batch !== null }; }, [files, activeId, batch]);
 
+  // A file dropped anywhere else would make the browser open it and leave the
+  // page, losing the list. Catch it and add it like any other drop.
+  useEffect(() => {
+    const over = (e: globalThis.DragEvent) => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault(); };
+    const drop = (e: globalThis.DragEvent) => {
+      if (!e.dataTransfer?.types.includes('Files')) return;
+      e.preventDefault();
+      if (!latest.current.batching) void addFiles(e.dataTransfer.files);
+    };
+    window.addEventListener('dragover', over);
+    window.addEventListener('drop', drop);
+    return () => {
+      window.removeEventListener('dragover', over);
+      window.removeEventListener('drop', drop);
+    };
+  }, [addFiles]);
+
   const removeFile = useCallback((id: string) => {
     const { files: current, activeId: currentActive, batching } = latest.current;
     if (batching) return;
@@ -325,10 +342,16 @@ export default function App() {
   const dropHandlers = {
     onDragOver: (e: DragEvent) => { e.preventDefault(); setDragOver(true); },
     onDragLeave: () => setDragOver(false),
-    onDrop: (e: DragEvent) => { e.preventDefault(); setDragOver(false); if (!locked) void addFiles(e.dataTransfer.files); },
+    // stopPropagation: the window-level drop handler below must not add the same files twice.
+    onDrop: (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); setDragOver(false); if (!locked) void addFiles(e.dataTransfer.files); },
   };
 
   const empty = files.length === 0;
+  const errorBox = error ? (
+    <p className={`${empty ? 'mt-6' : 'mt-8'} rounded-field border border-danger/30 bg-danger-tint px-4 py-3 text-sm text-danger break-words`}>
+      {error}
+    </p>
+  ) : null;
   /** While "Gem alle" runs, the list is locked so the zip matches what is on screen. */
   const locked = batch !== null;
 
@@ -337,7 +360,7 @@ export default function App() {
       <a href="#main" className="skip-link">Spring til indhold</a>
 
       <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur-md">
-        <nav aria-label="Hovedmenu" className="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+        <nav aria-label="Hovedmenu" className="mx-auto max-w-6xl px-4 sm:px-6 min-h-16 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <a
             href="/"
             onClick={(e) => {
@@ -350,7 +373,7 @@ export default function App() {
           >
             Localify
           </a>
-          <div className="flex items-center gap-1 sm:gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
             <a href="#om" className="hidden sm:inline-flex h-10 items-center rounded-full px-3 text-sm font-medium text-ink-dim hover:text-ink hover:bg-sunken transition-colors">
               Sådan virker det
             </a>
@@ -375,11 +398,11 @@ export default function App() {
           aria-labelledby="title"
           className={`mx-auto max-w-6xl px-4 sm:px-6 overflow-x-clip ${empty ? 'pt-12 sm:pt-20 pb-16' : 'pt-8 sm:pt-10 pb-12'}`}
         >
-          <div className={empty ? 'grid lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] gap-10 lg:gap-16 items-center' : ''}>
+          <div className={empty ? 'grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] gap-10 lg:gap-16 items-center' : ''}>
             <div className={empty ? '' : 'flex flex-wrap items-end justify-between gap-x-8 gap-y-2 mb-8'}>
               <h1
                 id="title"
-                className={`font-display font-extrabold text-ink tracking-[-0.04em] ${
+                className={`font-display font-extrabold text-ink tracking-[-0.04em] hyphens-auto [overflow-wrap:anywhere] ${
                   empty ? 'text-[clamp(2.75rem,7vw,5.25rem)] leading-[0.95]' : 'text-3xl sm:text-4xl leading-tight'
                 }`}
               >
@@ -403,6 +426,8 @@ export default function App() {
                   <span className="hidden [@media(pointer:fine)]:inline text-sm text-ink-dim">eller træk dem ind på coveret</span>
                 </div>
               )}
+              {/* On the empty page the message sits under the button that caused it, not below the sleeve and off a phone's screen. */}
+              {empty && <div role="alert">{errorBox}</div>}
             </div>
 
             {empty && (
@@ -456,13 +481,7 @@ export default function App() {
           </div>
 
           {/* Kept mounted so screen readers announce the message when it appears. */}
-          <div role="alert">
-            {error && (
-              <p className="mt-8 rounded-field border border-danger/30 bg-danger-tint px-4 py-3 text-sm text-danger break-words">
-                {error}
-              </p>
-            )}
-          </div>
+          {!empty && <div role="alert">{errorBox}</div>}
 
           {!empty && (
             <div className="mt-6 grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-6 items-start">
@@ -471,7 +490,7 @@ export default function App() {
                 aria-label="Dine filer"
                 className={`cut p-4 sm:p-5 shadow-print transition-colors ${dragOver ? 'bg-brand-tint' : 'bg-surface'}`}
               >
-                <div className="flex items-center justify-between gap-2 pb-3 mb-2 border-b border-line">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 pb-3 mb-2 border-b border-line">
                   <h2 className="eyebrow text-ink">
                     Side A <span className="text-ink-dim font-medium">· {files.length === 1 ? '1 nummer' : `${formatNumber(files.length)} numre`}</span>
                   </h2>
@@ -627,7 +646,7 @@ const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSelect, o
         onClick={() => onSelect(f.id)}
         title={f.file.name}
         aria-current={active ? 'true' : undefined}
-        className={`w-full text-left pl-2 pr-11 py-2.5 rounded-field transition-colors grid grid-cols-[2rem_minmax(0,1fr)] items-baseline gap-2 ${
+        className={`w-full text-left pl-2 pr-10 py-2.5 rounded-field transition-colors grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 ${
           active ? 'bg-brand-tint' : 'hover:bg-sunken'
         }`}
       >
@@ -638,7 +657,7 @@ const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSelect, o
         </span>
         <span className="min-w-0">
           <span className="flex items-center gap-1.5">
-            <span className="truncate-fname font-medium text-ink">
+            <span dir="auto" className="truncate-fname font-medium text-ink">
               {f.editable.title || f.file.name}
             </span>
             {(f.saved || f.dirty) && (

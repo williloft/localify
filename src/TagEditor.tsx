@@ -24,6 +24,19 @@ interface Props {
 }
 
 /** Laid out like credits: the long fields wide, the numbers narrow. */
+/**
+ * Gentle checks for the two fields with a usual shape. They only add a hint:
+ * people write "1998-04" or "3/12" on purpose, so the value is saved as typed.
+ */
+const SHAPES: Partial<Record<keyof EditableTags, { ok: RegExp; hint: string }>> = {
+  year: { ok: /^\d{4}(-\d{2}(-\d{2})?)?$/, hint: 'Ser ikke ud som et årstal, fx 1998. Det gemmes, som du skrev det.' },
+  track: { ok: /^\d{1,4}(\/\d{1,4})?$/, hint: 'Ser ikke ud som et spornummer, fx 3 eller 3/12. Det gemmes, som du skrev det.' },
+};
+
+/** Covers most players show, and the size past which a cover mostly adds weight. */
+const SAFE_COVER = new Set(['image/jpeg', 'image/png']);
+const BIG_COVER = 2 * 1024 * 1024;
+
 const FIELDS: { key: keyof EditableTags; label: string; placeholder: string; span: string; numeric?: boolean }[] = [
   { key: 'title', label: 'Titel', placeholder: 'fx Blæsten går frisk', span: 'md:col-span-4' },
   { key: 'track', label: 'Spornummer', placeholder: 'fx 3/12', span: 'md:col-span-2', numeric: true },
@@ -61,6 +74,15 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
   // never leave the <img> pointing at a dead blob: URL.
   const coverUrl = useMemo(() => (cover ? toDataUrl(cover) : null), [cover]);
   const coverBroken = coverUrl !== null && coverUrl === brokenUrl;
+
+  // Any image is accepted and kept, but say so when players may not show it.
+  const coverWarning = !cover
+    ? ''
+    : !SAFE_COVER.has(cover.mime)
+      ? `${cover.mime.replace('image/', '').toUpperCase()} vises ikke i alle afspillere. JPEG eller PNG er sikrest.`
+      : cover.data.byteLength > BIG_COVER
+        ? `Billedet fylder ${formatBytes(cover.data.byteLength)} og gør filen tung. Under 1 MB er rigeligt.`
+        : '';
 
   const carriedLabels = useMemo(() => fieldLabelList(read.carriedNames), [read.carriedNames]);
   const hiddenCarried = carriedLabels.length - CARRIED_SHOWN;
@@ -105,6 +127,8 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
             onDragLeave={() => setCoverDrag(false)}
             onDrop={(e) => {
               e.preventDefault();
+              // Keep the page-wide drop handler from treating the image as a music file.
+              e.stopPropagation();
               setCoverDrag(false);
               const f = e.dataTransfer.files[0];
               if (f) void setCoverFile(f);
@@ -154,6 +178,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
               </button>
             )}
           </div>
+          {coverWarning && <p className="mt-1 w-36 text-xs text-ink-dim">{coverWarning}</p>}
           <input
             ref={coverInputRef}
             type="file"
@@ -175,10 +200,10 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
               )}
             </div>
           </div>
-          <h2 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-[-0.03em] leading-tight text-ink line-clamp-2 break-words">
+          <h2 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-[-0.03em] leading-tight text-ink line-clamp-2 break-words" dir="auto">
             {editable.title || 'Uden titel'}
           </h2>
-          <p className="mt-1 text-ink-dim truncate-fname">{editable.artist || 'Ukendt kunstner'}</p>
+          <p className="mt-1 text-ink-dim truncate-fname" dir="auto">{editable.artist || 'Ukendt kunstner'}</p>
           <p className="mt-3 text-sm text-ink-dim truncate-fname" title={file.name}>{file.name}</p>
           <p className="text-sm text-ink-dim tabular-nums">
             {[formatBytes(file.size), read.durationSec ? formatDuration(read.durationSec) : null, read.sourceVersion]
@@ -189,7 +214,10 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-6 gap-x-5 gap-y-5 pt-8 border-t border-line">
-        {FIELDS.map(({ key, label, placeholder, span, numeric }) => (
+        {FIELDS.map(({ key, label, placeholder, span, numeric }) => {
+          const shape = SHAPES[key];
+          const odd = !!shape && editable[key].trim() !== '' && !shape.ok.test(editable[key].trim());
+          return (
           <div key={key} className={`flex flex-col gap-1.5 ${span}`}>
             <label htmlFor={`field-${key}`} className="eyebrow text-ink-dim">
               {label}
@@ -200,13 +228,19 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
               inputMode={numeric ? 'numeric' : undefined}
               autoComplete="off"
               spellCheck={numeric ? false : undefined}
+              dir="auto"
+              aria-describedby={odd ? `hint-${key}` : undefined}
               value={editable[key]}
               onChange={(e) => setField(key, e.target.value)}
               placeholder={placeholder}
               className={`w-full rounded-field border border-outline bg-surface px-3.5 py-2.5 text-ink outline-none transition-colors placeholder:italic placeholder:text-ink-dim hover:border-ink focus-visible:border-brand focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand ${numeric ? 'tabular-nums' : ''}`}
             />
+            {odd && (
+              <p id={`hint-${key}`} className="text-xs text-ink-dim">{shape.hint}</p>
+            )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* What happens to everything else: the whole point of the tool. */}
