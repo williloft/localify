@@ -281,7 +281,7 @@ export default function App() {
                 <span
                   aria-hidden="true"
                   className={`absolute inset-y-[6%] right-0 aspect-square rounded-full bg-ink transition-transform duration-300 ease-out motion-reduce:transition-none ${
-                    dragOver ? 'translate-x-[22%]' : 'translate-x-[10%] group-hover:translate-x-[16%]'
+                    dragOver ? 'translate-x-0' : '-translate-x-[10%] group-hover:translate-x-0'
                   }`}
                   style={{ backgroundImage: 'repeating-radial-gradient(circle at center, rgb(255 255 255 / 0.06) 0 1px, transparent 1px 5px)' }}
                 >
@@ -289,7 +289,7 @@ export default function App() {
                   <span className="absolute inset-[48.5%] rounded-full bg-ink" />
                 </span>
                 <span
-                  className={`cut absolute inset-0 right-[10%] flex flex-col justify-between p-6 sm:p-8 text-left shadow-print transition-colors ${
+                  className={`cut absolute inset-0 right-[22%] flex flex-col justify-between p-6 sm:p-8 text-left shadow-print transition-colors ${
                     dragOver ? 'bg-brand-tint' : 'bg-surface'
                   }`}
                 >
