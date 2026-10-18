@@ -9,6 +9,7 @@
  */
 import type { LoadedFile } from '../App';
 import type { CoverArt, EditableTags, FileTags } from '../lib/tags';
+import { skippedMessage } from '../lib/fieldLabels';
 
 export const DATASETS = ['demo', 'worst', 'empty', 'one', 'many'] as const;
 export type Dataset = (typeof DATASETS)[number];
@@ -116,10 +117,10 @@ async function worst(): Promise<Fixture> {
   const broken: CoverArt = { mime: 'image/heic', data: new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]) };
 
   return {
-    error:
-      'Sprunget over: ' +
-      Array.from({ length: 14 }, (_, i) => `"IMG_20250914_1830${String(i).padStart(2, '0')}_HDR_portrait_edited.HEIC"`).join(', ') +
-      ', "Liner notes (scan).pdf". Kun MP3 og M4A understøttes.',
+    error: skippedMessage([
+      ...Array.from({ length: 14 }, (_, i) => `IMG_20250914_1830${String(i).padStart(2, '0')}_HDR_portrait_edited.HEIC`),
+      'Liner notes (scan).pdf',
+    ]),
     saveNote:
       'Kunne ikke skrive: Komponist, Sangtekst, MusicBrainz Release Track Id, ACOUSTID_FINGERPRINT. ' +
       'Felter uden MP3-modstykke gik tabt: Kodet med, Gapless-afspilning, Sortering: albumkunstner.',

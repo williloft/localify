@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { LoadedFile } from './App';
 import type { AudioFormat, CoverArt, EditableTags } from './lib/tags';
 import { mapM4aToId3 } from './lib/tags';
 import { buildFilename, PATTERNS, type NamePattern } from './lib/filename';
-import { fieldLabels, plural } from './lib/fieldLabels';
+import { fieldLabelList, fieldLabels, formatBytes, formatDuration, plural } from './lib/fieldLabels';
 import { Icon } from './Icon';
 
 interface Props {
@@ -36,26 +36,34 @@ const FIELDS: { key: keyof EditableTags; label: string; placeholder: string; spa
 const SELECT =
   'w-full min-w-0 appearance-auto rounded-field border border-outline bg-surface px-3 py-2.5 text-ink outline-none focus-visible:outline-2 focus-visible:outline-brand';
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+function toDataUrl({ mime, data }: CoverArt): string {
+  let bin = '';
+  // Chunked, so a large cover doesn't overflow the argument limit of fromCharCode.
+  for (let i = 0; i < data.length; i += 0x8000) {
+    bin += String.fromCharCode(...data.subarray(i, i + 0x8000));
+  }
+  return `data:${mime};base64,${btoa(bin)}`;
 }
+
+/** How many preserved fields show before the rest fold behind "+N mere". */
+const CARRIED_SHOWN = 8;
 
 export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange, progress, saveNote, onUseM4a, onChange, onSave }: Props) {
   const { read, editable, cover, file } = loaded;
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverDrag, setCoverDrag] = useState(false);
 
-  const coverUrl = useMemo(() => {
-    if (!cover) return null;
-    // Copy into a fresh view so the Blob owns a stable buffer.
-    return URL.createObjectURL(new Blob([cover.data.slice()], { type: cover.mime }));
-  }, [cover]);
+  /** The URL that failed to load, so a new cover starts out unbroken. */
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  const [showAllCarried, setShowAllCarried] = useState(false);
 
-  useEffect(() => {
-    return () => { if (coverUrl) URL.revokeObjectURL(coverUrl); };
-  }, [coverUrl]);
+  // A data URL has nothing to revoke, so remounts and StrictMode re-runs can
+  // never leave the <img> pointing at a dead blob: URL.
+  const coverUrl = useMemo(() => (cover ? toDataUrl(cover) : null), [cover]);
+  const coverBroken = coverUrl !== null && coverUrl === brokenUrl;
+
+  const carriedLabels = useMemo(() => fieldLabelList(read.carriedNames), [read.carriedNames]);
+  const hiddenCarried = carriedLabels.length - CARRIED_SHOWN;
 
   const converting = read.format === 'm4a' && loaded.outputFormat === 'mp3';
 
@@ -103,11 +111,24 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
             }}
             onClick={() => coverInputRef.current?.click()}
             className={`w-36 aspect-square flex items-center justify-center overflow-hidden shadow-print transition-colors ${
-              coverUrl ? 'bg-ink' : coverDrag ? 'bg-brand-tint' : 'bg-sunken hover:bg-line/60'
+              coverUrl && !coverBroken ? 'bg-ink' : coverDrag ? 'bg-brand-tint' : 'bg-sunken hover:bg-line/60'
             }`}
           >
-            {coverUrl ? (
-              <img src={coverUrl} alt="" width={144} height={144} className="w-full h-full object-cover" />
+            {coverUrl && coverBroken ? (
+              <span className="flex flex-col items-center gap-1 px-3 text-center text-ink-dim">
+                <Icon name="warning" className="w-6 h-6" />
+                <span className="text-xs leading-snug">Kan ikke vise billedet</span>
+                <span className="text-xs leading-snug break-all">{cover?.mime}</span>
+              </span>
+            ) : coverUrl ? (
+              <img
+                src={coverUrl}
+                alt=""
+                width={144}
+                height={144}
+                onError={() => setBrokenUrl(coverUrl)}
+                className="w-full h-full object-cover"
+              />
             ) : (
               <span className="flex flex-col items-center gap-2 text-ink-dim">
                 <Icon name="image" className="w-7 h-7" />
@@ -158,13 +179,11 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
             {editable.title || 'Uden titel'}
           </h2>
           <p className="mt-1 text-ink-dim truncate-fname">{editable.artist || 'Ukendt kunstner'}</p>
-          <p className="mt-3 text-sm text-ink-dim truncate-fname" title={file.name}>
-            {file.name}
-            <span className="tabular-nums">
-              {` · ${formatBytes(file.size)}`}
-              {read.durationSec ? ` · ${Math.round(read.durationSec)} sek` : ''}
-            </span>
-            {` · ${read.sourceVersion}`}
+          <p className="mt-3 text-sm text-ink-dim truncate-fname" title={file.name}>{file.name}</p>
+          <p className="text-sm text-ink-dim tabular-nums">
+            {[formatBytes(file.size), read.durationSec ? formatDuration(read.durationSec) : null, read.sourceVersion]
+              .filter(Boolean)
+              .join(' · ')}
           </p>
         </div>
       </div>
@@ -200,7 +219,23 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
                 <strong className="font-semibold text-ink">
                   {plural(read.carriedNames.length, 'andet felt bevares', 'andre felter bevares')}
                 </strong>{' '}
-                uændret: <span title={read.carriedNames.join(', ')}>{fieldLabels(read.carriedNames)}</span>.
+                uændret:{' '}
+                <span title={read.carriedNames.join(', ')}>
+                  {(showAllCarried ? carriedLabels : carriedLabels.slice(0, CARRIED_SHOWN)).join(', ')}
+                </span>
+                {hiddenCarried > 0 ? (
+                  <>
+                    {showAllCarried ? '. ' : ' '}
+                    <button
+                      type="button"
+                      aria-expanded={showAllCarried}
+                      onClick={() => setShowAllCarried((v) => !v)}
+                      className="font-medium text-brand underline underline-offset-4 decoration-brand/40 hover:decoration-brand"
+                    >
+                      {showAllCarried ? 'Vis færre' : `+${hiddenCarried} mere`}
+                    </button>
+                  </>
+                ) : '.'}
               </p>
             </div>
           )}

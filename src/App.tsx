@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import {
   readFileTags,
   saveFile,
@@ -10,7 +10,7 @@ import {
 } from './lib/tags';
 import { buildFilename, type NamePattern } from './lib/filename';
 import { DecodeError } from './lib/transcode';
-import { fieldLabels } from './lib/fieldLabels';
+import { fieldLabels, formatNumber, skippedMessage } from './lib/fieldLabels';
 import { TagEditor } from './TagEditor';
 import { About } from './About';
 import { Icon } from './Icon';
@@ -71,10 +71,8 @@ export default function App() {
   const addFiles = useCallback(async (incoming: FileList | File[]) => {
     const all = Array.from(incoming);
     const list = all.filter((f) => acceptsFile(f.name));
-    const rejected = all.filter((f) => !acceptsFile(f.name)).map((f) => `"${f.name}"`);
-    setError(rejected.length > 0
-      ? `Sprunget over: ${rejected.join(', ')}. Kun MP3 og M4A understøttes.`
-      : '');
+    const rejected = all.filter((f) => !acceptsFile(f.name)).map((f) => f.name);
+    setError(rejected.length > 0 ? skippedMessage(rejected) : '');
     if (list.length === 0) return;
 
     setBusy(true);
@@ -116,16 +114,36 @@ export default function App() {
     );
   }, [activeId]);
 
+  // Latest list and selection, read by the row callbacks below so they can stay
+  // stable and the memoized rows skip re-rendering on every keystroke.
+  const latest = useRef({ files, activeId });
+  useEffect(() => { latest.current = { files, activeId }; }, [files, activeId]);
+
   const removeFile = useCallback((id: string) => {
-    const idx = files.findIndex((f) => f.id === id);
-    const next = files.filter((f) => f.id !== id);
+    const { files: current, activeId: currentActive } = latest.current;
+    const idx = current.findIndex((f) => f.id === id);
+    const next = current.filter((f) => f.id !== id);
     setFiles(next);
-    if (id === activeId) {
+    if (id === currentActive) {
       // Prefer the row that slid into this slot, else the one above it.
       const fallback = next[idx] ?? next[idx - 1] ?? null;
       setActiveId(fallback ? fallback.id : null);
     }
-  }, [files, activeId]);
+  }, []);
+
+  const selectFile = useCallback((id: string) => {
+    setActiveId(id);
+    setSaveNote('');
+    setOfferM4a(false);
+  }, []);
+
+  const listRef = useRef<HTMLOListElement>(null);
+  const [listFade, setListFade] = useState(false);
+  const updateListFade = useCallback(() => {
+    const el = listRef.current;
+    setListFade(!!el && el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+  }, []);
+  useEffect(updateListFade, [files.length, updateListFade]);
 
   const clearAll = useCallback(() => {
     if (files.some((f) => f.dirty) && !confirm('Der er ugemte ændringer. Ryd listen alligevel?')) return;
@@ -338,7 +356,7 @@ export default function App() {
           {/* Kept mounted so screen readers announce the message when it appears. */}
           <div role="alert">
             {error && (
-              <p className="mt-8 rounded-field border border-danger/30 bg-danger-tint px-4 py-3 text-sm text-danger">
+              <p className="mt-8 rounded-field border border-danger/30 bg-danger-tint px-4 py-3 text-sm text-danger break-words">
                 {error}
               </p>
             )}
@@ -353,7 +371,7 @@ export default function App() {
               >
                 <div className="flex items-center justify-between gap-2 pb-3 mb-2 border-b border-line">
                   <h2 className="eyebrow text-ink">
-                    Side A <span className="text-ink-dim font-medium">· {files.length === 1 ? '1 nummer' : `${files.length} numre`}</span>
+                    Side A <span className="text-ink-dim font-medium">· {files.length === 1 ? '1 nummer' : `${formatNumber(files.length)} numre`}</span>
                   </h2>
                   <div className="flex items-center gap-1 -mr-1">
                     <button
@@ -372,49 +390,23 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-                <ol className="max-h-[440px] overflow-y-auto -mx-1 px-1">
+                {/* The fade says "there is more below" until the list is scrolled to its end. */}
+                <ol
+                  ref={listRef}
+                  onScroll={updateListFade}
+                  className={`max-h-[440px] overflow-y-auto -mx-1 px-1 ${
+                    listFade ? '[mask-image:linear-gradient(to_bottom,black_calc(100%-3rem),transparent)]' : ''
+                  }`}
+                >
                   {files.map((f, i) => (
-                    <li key={f.id} className="group relative">
-                      <button
-                        onClick={() => { setActiveId(f.id); setSaveNote(''); setOfferM4a(false); }}
-                        title={f.file.name}
-                        aria-current={f.id === activeId ? 'true' : undefined}
-                        className={`w-full text-left pl-2 pr-11 py-2.5 rounded-field transition-colors grid grid-cols-[2rem_minmax(0,1fr)] items-baseline gap-2 ${
-                          f.id === activeId ? 'bg-brand-tint' : 'hover:bg-sunken'
-                        }`}
-                      >
-                        <span
-                          className={`font-display text-sm tabular-nums ${f.id === activeId ? 'text-brand font-semibold' : 'text-ink-dim'}`}
-                        >
-                          {String(i + 1).padStart(2, '0')}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-1.5">
-                            <span className="truncate-fname font-medium text-ink">
-                              {f.editable.title || f.file.name}
-                            </span>
-                            {(f.saved || f.dirty) && (
-                              <Icon
-                                name={f.saved ? 'check_circle' : 'edit'}
-                                label={f.saved ? 'Gemt' : 'Ugemte ændringer'}
-                                className={`w-3.5 h-3.5 ${f.saved ? 'text-brand' : 'text-ink-dim'}`}
-                              />
-                            )}
-                          </span>
-                          {f.editable.title && (
-                            <span className="block text-xs text-ink-dim truncate-fname">{f.file.name}</span>
-                          )}
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => removeFile(f.id)}
-                        aria-label={`Fjern ${f.editable.title || f.file.name} fra listen`}
-                        title="Fjern fra listen"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full text-ink-dim hover:bg-surface hover:text-danger transition-[color,background-color,opacity] [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
-                      >
-                        <Icon name="close" className="w-4 h-4" />
-                      </button>
-                    </li>
+                    <TrackRow
+                      key={f.id}
+                      file={f}
+                      index={i}
+                      active={f.id === activeId}
+                      onSelect={selectFile}
+                      onRemove={removeFile}
+                    />
                   ))}
                 </ol>
               </aside>
@@ -474,3 +466,58 @@ export default function App() {
     </div>
   );
 }
+
+interface TrackRowProps {
+  file: LoadedFile;
+  index: number;
+  active: boolean;
+  onSelect: (id: string) => void;
+  onRemove: (id: string) => void;
+}
+
+/** One line of the track list. Memoized: typing in the editor only re-renders the active row. */
+const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSelect, onRemove }: TrackRowProps) {
+  return (
+    <li className="group relative">
+      <button
+        onClick={() => onSelect(f.id)}
+        title={f.file.name}
+        aria-current={active ? 'true' : undefined}
+        className={`w-full text-left pl-2 pr-11 py-2.5 rounded-field transition-colors grid grid-cols-[2rem_minmax(0,1fr)] items-baseline gap-2 ${
+          active ? 'bg-brand-tint' : 'hover:bg-sunken'
+        }`}
+      >
+        <span
+          className={`font-display text-sm tabular-nums ${active ? 'text-brand font-semibold' : 'text-ink-dim'}`}
+        >
+          {String(i + 1).padStart(2, '0')}
+        </span>
+        <span className="min-w-0">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate-fname font-medium text-ink">
+              {f.editable.title || f.file.name}
+            </span>
+            {(f.saved || f.dirty) && (
+              <Icon
+                name={f.saved ? 'check_circle' : 'edit'}
+                label={f.saved ? 'Gemt' : 'Ugemte ændringer'}
+                className={`w-3.5 h-3.5 ${f.saved ? 'text-brand' : 'text-ink-dim'}`}
+              />
+            )}
+          </span>
+          {f.editable.title && (
+            <span className="block text-xs text-ink-dim truncate-fname">{f.file.name}</span>
+          )}
+        </span>
+      </button>
+      <button
+        onClick={() => onRemove(f.id)}
+        aria-label={`Fjern ${f.editable.title || f.file.name} fra listen`}
+        title="Fjern fra listen"
+        className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full text-ink-dim hover:bg-surface hover:text-danger transition-[color,background-color,opacity] [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+      >
+        <Icon name="close" className="w-4 h-4" />
+      </button>
+    </li>
+      );
+});
