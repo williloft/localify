@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import {
   readFileTags,
   saveFile,
@@ -16,6 +16,9 @@ import { About } from './About';
 import { Icon } from './Icon';
 
 const PATTERN_KEY = 'localify:name-pattern';
+
+// Worst-case data switch for break-ui. Dev builds only; production drops the import.
+const DataToggle = import.meta.env.DEV ? lazy(() => import('./dev/DataToggle')) : null;
 
 /** Reading storage throws in some privacy contexts, so never let it break boot. */
 function storedPattern(): NamePattern {
@@ -191,6 +194,13 @@ export default function App() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [files]);
+
+  const loadFixture = useCallback((f: { files: LoadedFile[]; error?: string; saveNote?: string }) => {
+    setFiles(f.files);
+    setActiveId(f.files[0]?.id ?? null);
+    setError(f.error ?? '');
+    setSaveNote(f.saveNote ?? '');
+  }, []);
 
   const pick = () => inputRef.current?.click();
 
@@ -455,6 +465,12 @@ export default function App() {
           </a>
         </div>
       </footer>
+
+      {DataToggle && (
+        <Suspense fallback={null}>
+          <DataToggle onLoad={loadFixture} />
+        </Suspense>
+      )}
     </div>
   );
 }
