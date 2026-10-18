@@ -2,46 +2,90 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
-  box-sizing: border-box;
+@layer base {
+  html {
+    background-color: #f6f5f2;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: #f6f5f2;
+    color: #171a21;
+    font-family: 'Hanken Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+    font-size: 1rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* No double-tap zoom delay on controls, and a long press doesn't select a label. */
+  a,
+  button,
+  select,
+  label,
+  summary {
+    touch-action: manipulation;
+  }
+
+  button {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background-color: #a1f4c6;
+    color: #0b4f34;
+  }
+
+  :focus-visible {
+    outline: 2px solid #106c48;
+    outline-offset: 3px;
+  }
 }
 
-html {
-  background-color: #ffffff;
+@layer components {
+  /* The one cut corner, top right, shared by every panel. */
+  .cut {
+    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+  }
+
+  /* Small printed labels: "Side A", "Liner notes", field names. */
+  .eyebrow {
+    font-family: 'Sora Variable', ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .skip-link {
+    position: absolute;
+    left: 16px;
+    top: -100px;
+    z-index: 100;
+    padding: 10px 16px;
+    border-radius: 9999px;
+    background: #171a21;
+    color: #f6f5f2;
+    font-weight: 700;
+  }
+
+  .skip-link:focus {
+    top: 12px;
+  }
 }
 
-body {
-  background-color: #ffffff;
-  color: #1b1b1d;
-  font-family: 'Inter Variable', sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* No double-tap zoom delay on controls. */
-button,
-select,
-label {
-  touch-action: manipulation;
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-}
-::-webkit-scrollbar-track {
-  background: #ffffff;
-}
-::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #a1f4c6;
-}
-
-/* Utility: truncate long filenames without breaking the flex row. */
-.truncate-fname {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+@layer utilities {
+  /* Utility: truncate long filenames without breaking the flex row. */
+  .truncate-fname {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }

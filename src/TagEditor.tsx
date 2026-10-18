@@ -8,6 +8,8 @@ import { Icon } from './Icon';
 
 interface Props {
   loaded: LoadedFile;
+  /** Position in the track list, 1-based. */
+  trackNumber: number;
   busy: boolean;
   pattern: NamePattern;
   onPatternChange: (p: NamePattern) => void;
@@ -19,14 +21,18 @@ interface Props {
   onSave: () => void;
 }
 
-const FIELDS: { key: keyof EditableTags; label: string; placeholder: string; wide?: boolean }[] = [
-  { key: 'title', label: 'Titel', placeholder: 'fx Blæsten går frisk' },
-  { key: 'artist', label: 'Kunstner', placeholder: 'fx Søren Ødegård' },
-  { key: 'album', label: 'Album', placeholder: 'fx Årstiderne', wide: true },
-  { key: 'albumArtist', label: 'Albumkunstner', placeholder: 'fx Diverse Kunstnere' },
-  { key: 'year', label: 'År', placeholder: 'fx 1998' },
-  { key: 'track', label: 'Spornummer', placeholder: 'fx 3/12' },
+/** Laid out like credits: the long fields wide, the numbers narrow. */
+const FIELDS: { key: keyof EditableTags; label: string; placeholder: string; span: string; numeric?: boolean }[] = [
+  { key: 'title', label: 'Titel', placeholder: 'fx Blæsten går frisk', span: 'md:col-span-4' },
+  { key: 'track', label: 'Spornummer', placeholder: 'fx 3/12', span: 'md:col-span-2', numeric: true },
+  { key: 'artist', label: 'Kunstner', placeholder: 'fx Søren Ødegård', span: 'md:col-span-3' },
+  { key: 'albumArtist', label: 'Albumkunstner', placeholder: 'fx Diverse Kunstnere', span: 'md:col-span-3' },
+  { key: 'album', label: 'Album', placeholder: 'fx Årstiderne', span: 'md:col-span-4' },
+  { key: 'year', label: 'År', placeholder: 'fx 1998', span: 'md:col-span-2', numeric: true },
 ];
+
+const SELECT =
+  'w-full min-w-0 appearance-auto rounded-field border border-outline bg-surface px-3 py-2.5 text-ink outline-none focus-visible:outline-2 focus-visible:outline-brand';
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -34,7 +40,7 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, saveNote, onChange, onSave }: Props) {
+export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange, progress, saveNote, onChange, onSave }: Props) {
   const { read, editable, cover, file } = loaded;
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverDrag, setCoverDrag] = useState(false);
@@ -79,220 +85,218 @@ export function TagEditor({ loaded, busy, pattern, onPatternChange, progress, sa
 
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4 pb-6 border-b border-slate-100">
-        <div className="min-w-0">
-          <h2 className="font-headline-md text-on-surface truncate-fname" title={file.name}>{file.name}</h2>
-          <p className="font-label-sm text-secondary font-normal mt-1">
-            {formatBytes(file.size)}
-            {read.durationSec ? ` · ${Math.round(read.durationSec)} sek` : ''}
-            {` · ${read.sourceVersion}`}
-          </p>
-        </div>
-        <div role="status" className="shrink-0">
-          {loaded.saved && (
-            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-fixed/20 text-on-primary-fixed-variant font-label-sm">
-              <Icon name="check_circle" className="w-4 h-4" />
-              Gemt
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Cover */}
-      <div className="flex items-center gap-6">
-        <button
-          type="button"
-          aria-label={cover ? 'Udskift coverbillede' : 'Vælg coverbillede'}
-          onDragOver={(e) => { e.preventDefault(); setCoverDrag(true); }}
-          onDragLeave={() => setCoverDrag(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setCoverDrag(false);
-            const f = e.dataTransfer.files[0];
-            if (f) void setCoverFile(f);
-          }}
-          onClick={() => coverInputRef.current?.click()}
-          className={`w-24 h-24 shrink-0 bg-surface-container-low rounded-2xl flex items-center justify-center border border-dashed overflow-hidden cursor-pointer transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
-            coverDrag ? 'border-primary-fixed bg-primary-fixed/5' : 'border-slate-300'
-          }`}
-        >
-          {coverUrl ? (
-            <img src={coverUrl} alt="" width={96} height={96} className="w-full h-full object-cover" />
-          ) : (
-            <Icon name="image" className="text-slate-400 w-7 h-7" />
-          )}
-        </button>
-        <div className="flex flex-col gap-2 min-w-0">
-          <span className="font-label-md uppercase tracking-widest text-on-surface-variant text-xs">
-            Cover
-          </span>
-          <div className="flex gap-2">
+      {/* Cover and the record's name, the way a sleeve shows them. */}
+      <div className="grid gap-6 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-end">
+        <div>
+          <button
+            type="button"
+            aria-label={cover ? 'Udskift coverbillede' : 'Vælg coverbillede'}
+            onDragOver={(e) => { e.preventDefault(); setCoverDrag(true); }}
+            onDragLeave={() => setCoverDrag(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setCoverDrag(false);
+              const f = e.dataTransfer.files[0];
+              if (f) void setCoverFile(f);
+            }}
+            onClick={() => coverInputRef.current?.click()}
+            className={`w-36 aspect-square flex items-center justify-center overflow-hidden shadow-print transition-colors ${
+              coverUrl ? 'bg-ink' : coverDrag ? 'bg-brand-tint' : 'bg-sunken hover:bg-line/60'
+            }`}
+          >
+            {coverUrl ? (
+              <img src={coverUrl} alt="" width={144} height={144} className="w-full h-full object-cover" />
+            ) : (
+              <span className="flex flex-col items-center gap-2 text-ink-dim">
+                <Icon name="image" className="w-7 h-7" />
+                <span className="text-xs">Intet cover</span>
+              </span>
+            )}
+          </button>
+          <div className="mt-2 flex items-center gap-1 -ml-2">
             <button
+              type="button"
               onClick={() => coverInputRef.current?.click()}
-              className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 shadow-sm transition-colors rounded-xl font-label-sm text-slate-700"
+              className="h-9 px-2 rounded-full text-sm font-medium text-brand hover:bg-brand-tint transition-colors"
             >
               {cover ? 'Udskift' : 'Vælg billede'}
             </button>
             {cover && (
               <button
+                type="button"
                 onClick={() => onChange({ cover: null })}
-                className="px-4 py-2 text-secondary hover:text-error transition-colors rounded-xl font-label-sm"
+                className="h-9 px-2 rounded-full text-sm text-ink-dim hover:text-danger hover:bg-danger-tint transition-colors"
               >
                 Fjern
               </button>
             )}
           </div>
-          {cover && (
-            <span className="font-label-sm text-secondary font-normal">
-              {cover.mime} · {formatBytes(cover.data.byteLength)}
-            </span>
-          )}
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void setCoverFile(f); e.target.value = ''; }}
+          />
         </div>
-        <input
-          ref={coverInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) void setCoverFile(f); e.target.value = ''; }}
-        />
+
+        <div className="min-w-0 sm:pb-11">
+          <div className="flex items-center justify-between gap-3">
+            <p className="eyebrow text-ink-dim">Nummer {String(trackNumber).padStart(2, '0')}</p>
+            <div role="status">
+              {loaded.saved && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-tint px-3 py-1 text-sm font-medium text-brand-deep">
+                  <Icon name="check_circle" className="w-4 h-4" />
+                  Gemt
+                </span>
+              )}
+            </div>
+          </div>
+          <h2 className="mt-2 font-display text-2xl sm:text-3xl font-bold tracking-[-0.03em] leading-tight text-ink line-clamp-2 break-words">
+            {editable.title || 'Uden titel'}
+          </h2>
+          <p className="mt-1 text-ink-dim truncate-fname">{editable.artist || 'Ukendt kunstner'}</p>
+          <p className="mt-3 text-sm text-ink-dim truncate-fname" title={file.name}>
+            {file.name}
+            <span className="tabular-nums">
+              {` · ${formatBytes(file.size)}`}
+              {read.durationSec ? ` · ${Math.round(read.durationSec)} sek` : ''}
+            </span>
+            {` · ${read.sourceVersion}`}
+          </p>
+        </div>
       </div>
 
-      {/* Fields */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
-        {FIELDS.map(({ key, label, placeholder, wide }) => (
-          <div key={key} className={`flex flex-col gap-1 ${wide ? 'md:col-span-2' : ''}`}>
-            <label
-              htmlFor={`field-${key}`}
-              className="font-label-sm text-on-surface-variant uppercase tracking-wider text-xs px-1"
-            >
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-x-5 gap-y-5 pt-8 border-t border-line">
+        {FIELDS.map(({ key, label, placeholder, span, numeric }) => (
+          <div key={key} className={`flex flex-col gap-1.5 ${span}`}>
+            <label htmlFor={`field-${key}`} className="eyebrow text-ink-dim">
               {label}
             </label>
             <input
               id={`field-${key}`}
               type="text"
+              inputMode={numeric ? 'numeric' : undefined}
+              autoComplete="off"
+              spellCheck={numeric ? false : undefined}
               value={editable[key]}
               onChange={(e) => setField(key, e.target.value)}
               placeholder={placeholder}
-              className="w-full bg-surface-container-low border border-outline rounded-xl font-body-md px-4 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary focus:bg-white transition-colors text-on-surface placeholder:text-slate-500 placeholder:italic"
+              className={`w-full rounded-field border border-outline bg-surface px-3.5 py-2.5 text-ink outline-none transition-colors placeholder:italic placeholder:text-ink-dim/70 hover:border-ink focus-visible:border-brand focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand ${numeric ? 'tabular-nums' : ''}`}
             />
           </div>
         ))}
       </div>
 
-      {/* What happens to everything else — the whole point of the tool. */}
-      <div className="space-y-2">
-        {read.carriedNames.length > 0 && (
-          <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-surface-container-low">
-            <Icon name="shield" className="w-4 h-4 text-primary mt-0.5" />
-            <div className="font-body-md text-sm text-secondary">
-              <strong className="text-on-surface font-medium">
-                {plural(read.carriedNames.length, 'andet felt bevares', 'andre felter bevares')}
-              </strong>{' '}
-              uændret: <span title={read.carriedNames.join(', ')}>{fieldLabels(read.carriedNames)}</span>
-            </div>
-          </div>
-        )}
-        {read.unsupported.length > 0 && (
-          <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-error-container/40 border border-error/20">
-            <Icon name="warning" className="w-4 h-4 text-error mt-0.5" />
-            <div className="font-body-md text-sm text-on-surface">
-              <strong className="font-medium">
-                {plural(read.unsupported.length, 'felt kan', 'felter kan')} ikke skrives tilbage
-              </strong>{' '}
-              og går tabt, hvis du gemmer: <span title={read.unsupported.join(', ')}>{fieldLabels(read.unsupported)}</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {read.format === 'm4a' && (
-        <div className="space-y-2">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-2xl bg-surface-container-low">
-            <label className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 sm:shrink-0">
-              <span className="font-label-sm text-on-surface-variant uppercase tracking-wider text-xs">
-                Gem som
-              </span>
-              <select
-                value={loaded.outputFormat}
-                onChange={(e) => onChange({ outputFormat: e.target.value as AudioFormat })}
-                className="max-w-full min-w-0 bg-white text-on-surface border border-outline rounded-xl font-body-md text-sm px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <option value="mp3">MP3 (konverteres)</option>
-                <option value="m4a">M4A (lyden røres ikke)</option>
-              </select>
-            </label>
-            <span className="font-body-md text-sm text-secondary">
-              {converting
-                ? 'Spotify og de fleste afspillere kræver MP3.'
-                : 'Beholder originalens lyd bit for bit.'}
-            </span>
-          </div>
-
-          {converting && (
-            <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-surface-container-low">
-              <Icon name="warning" className="w-4 h-4 text-secondary mt-0.5" />
-              <div className="font-body-md text-sm text-secondary">
-                <strong className="text-on-surface font-medium">Lyden kodes om.</strong>{' '}
-                AAC til MP3 er komprimering oven på komprimering, så filen bliver en
-                anelse ringere end originalen. Behold originalen.
-              </div>
+      {/* What happens to everything else: the whole point of the tool. */}
+      {(read.carriedNames.length > 0 || read.unsupported.length > 0) && (
+        <div className="space-y-3">
+          {read.carriedNames.length > 0 && (
+            <div className="flex items-start gap-3">
+              <Icon name="shield" className="w-5 h-5 shrink-0 text-brand mt-0.5" />
+              <p className="text-ink-dim">
+                <strong className="font-semibold text-ink">
+                  {plural(read.carriedNames.length, 'andet felt bevares', 'andre felter bevares')}
+                </strong>{' '}
+                uændret: <span title={read.carriedNames.join(', ')}>{fieldLabels(read.carriedNames)}</span>.
+              </p>
             </div>
           )}
-
-          {converting && wouldDrop.length > 0 && (
-            <div className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-error-container/40 border border-error/20">
-              <Icon name="warning" className="w-4 h-4 text-error mt-0.5" />
-              <div className="font-body-md text-sm text-on-surface">
-                <strong className="font-medium">
-                  {plural(wouldDrop.length, 'felt har', 'felter har')} intet MP3-modstykke
+          {read.unsupported.length > 0 && (
+            <div className="flex items-start gap-3 rounded-field border border-danger/25 bg-danger-tint px-4 py-3">
+              <Icon name="warning" className="w-5 h-5 shrink-0 text-danger mt-0.5" />
+              <p className="text-ink">
+                <strong className="font-semibold">
+                  {plural(read.unsupported.length, 'felt kan', 'felter kan')} ikke skrives tilbage
                 </strong>{' '}
-                og går tabt ved konvertering: <span title={wouldDrop.join(', ')}>{fieldLabels(wouldDrop)}</span>.
-              </div>
+                og går tabt, hvis du gemmer: <span title={read.unsupported.join(', ')}>{fieldLabels(read.unsupported)}</span>.
+              </p>
             </div>
           )}
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-2xl bg-surface-container-low">
-        <label className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 sm:shrink-0">
-          <span className="font-label-sm text-on-surface-variant uppercase tracking-wider text-xs">
-            Filnavn
-          </span>
-          <select
-            value={pattern}
-            onChange={(e) => onPatternChange(e.target.value as NamePattern)}
-            className="max-w-full min-w-0 bg-white text-on-surface border border-outline rounded-xl font-body-md text-sm px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            {PATTERNS.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
-        </label>
-        <span className="font-body-md text-sm text-secondary min-w-0 truncate-fname" title={previewName}>
-          Gemmes som <strong className="text-on-surface font-medium">{previewName}</strong>
-        </span>
+      <div className="rounded-panel bg-sunken p-4 sm:p-5 space-y-4">
+        <div className={`grid gap-4 ${read.format === 'm4a' ? 'sm:grid-cols-2' : ''}`}>
+          {read.format === 'm4a' && (
+            <div className="flex flex-col gap-1.5 min-w-0">
+              <label htmlFor="output-format" className="eyebrow text-ink-dim">Gem som</label>
+              <select
+                id="output-format"
+                value={loaded.outputFormat}
+                onChange={(e) => onChange({ outputFormat: e.target.value as AudioFormat })}
+                className={SELECT}
+              >
+                <option value="mp3">MP3, virker i Spotify</option>
+                <option value="m4a">M4A, lyden røres ikke</option>
+              </select>
+            </div>
+          )}
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <label htmlFor="name-pattern" className="eyebrow text-ink-dim">Filnavn</label>
+            <select
+              id="name-pattern"
+              value={pattern}
+              onChange={(e) => onPatternChange(e.target.value as NamePattern)}
+              className={SELECT}
+            >
+              {PATTERNS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {converting && (
+          <p className="flex items-start gap-2.5 text-sm text-ink-dim">
+            <Icon name="warning" className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              <strong className="font-semibold text-ink">Lyden kodes om.</strong> AAC til MP3 er
+              komprimering oven på komprimering, så filen bliver en anelse ringere end originalen.
+              Behold originalen.
+            </span>
+          </p>
+        )}
+
+        {converting && wouldDrop.length > 0 && (
+          <p className="flex items-start gap-2.5 rounded-field border border-danger/25 bg-danger-tint px-3 py-2.5 text-sm text-ink">
+            <Icon name="warning" className="w-4 h-4 shrink-0 text-danger mt-0.5" />
+            <span>
+              <strong className="font-semibold">
+                {plural(wouldDrop.length, 'felt har', 'felter har')} intet MP3-modstykke
+              </strong>{' '}
+              og går tabt ved konvertering: <span title={wouldDrop.join(', ')}>{fieldLabels(wouldDrop)}</span>.
+            </span>
+          </p>
+        )}
+
+        <p className="text-sm text-ink-dim truncate-fname" title={previewName}>
+          Gemmes som <strong className="font-semibold text-ink">{previewName}</strong>
+        </p>
       </div>
 
       <div className="space-y-3">
         <button
           onClick={onSave}
           disabled={busy}
-          className="w-full bg-primary-fixed text-on-primary-fixed font-headline-md py-4 rounded-2xl shadow-[0_4px_20px_rgba(156,239,193,0.4)] hover:shadow-[0_6px_24px_rgba(156,239,193,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-[box-shadow,transform] duration-200 motion-reduce:transition-none motion-reduce:hover:translate-y-0 flex items-center justify-center gap-2 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
+          className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-brand px-6 py-4 font-display text-lg font-semibold text-white shadow-lip transition-[transform,box-shadow] duration-150 hover:-translate-y-px hover:shadow-lip-hover active:translate-y-[2px] active:shadow-lip-pressed disabled:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed motion-reduce:transition-none"
         >
           <Icon name="download" />
-          {busy
-            ? progress !== null
-              ? `Koder om… ${Math.round(progress * 100)}%`
-              : 'Skriver…'
-            : 'Gem som ny fil'}
+          <span className="tabular-nums">
+            {busy
+              ? progress !== null
+                ? `Koder om… ${Math.round(progress * 100)} %`
+                : 'Skriver…'
+              : 'Gem som ny fil'}
+          </span>
         </button>
 
         {/* Next to the button that caused it, so it lands in view on a phone. */}
         <div role="alert">
           {saveNote && (
-            <div className="px-4 py-3 rounded-2xl bg-error-container border border-error/30 text-sm text-error font-body-md">
+            <p className="rounded-field border border-danger/30 bg-danger-tint px-4 py-3 text-sm text-danger">
               {saveNote}
-            </div>
+            </p>
           )}
         </div>
       </div>

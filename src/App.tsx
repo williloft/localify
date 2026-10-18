@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import {
   readFileTags,
   saveFile,
@@ -11,6 +11,7 @@ import {
 import { buildFilename, type NamePattern } from './lib/filename';
 import { fieldLabels } from './lib/fieldLabels';
 import { TagEditor } from './TagEditor';
+import { About } from './About';
 import { Icon } from './Icon';
 
 const PATTERN_KEY = 'localify:name-pattern';
@@ -186,110 +187,177 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [files]);
 
+  const pick = () => inputRef.current?.click();
+
+  /** Dropping files works on the empty sleeve and on the track list alike. */
+  const dropHandlers = {
+    onDragOver: (e: DragEvent) => { e.preventDefault(); setDragOver(true); },
+    onDragLeave: () => setDragOver(false),
+    onDrop: (e: DragEvent) => { e.preventDefault(); setDragOver(false); void addFiles(e.dataTransfer.files); },
+  };
+
+  const empty = files.length === 0;
+
   return (
-    <div className="light min-h-screen flex flex-col">
-      <nav className="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-100 shadow-[0_4px_20px_rgba(29,29,31,0.04)] h-16 flex items-center">
-        <div className="max-w-[1280px] mx-auto w-full flex items-center px-6">
-          <a className="text-xl font-bold tracking-tighter text-slate-900 flex items-center gap-2" href="/">
-            <span className="w-8 h-8 bg-primary-fixed text-on-primary-fixed flex items-center justify-center rounded-lg font-extrabold">
-              L
-            </span>
-            <span>Localify</span>
+    <div className="min-h-dvh flex flex-col">
+      <a href="#main" className="skip-link">Spring til indhold</a>
+
+      <header className="border-b border-line">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          <a href="/" className="font-display text-xl font-extrabold tracking-[-0.03em] text-brand">
+            Localify
           </a>
+          <p className="text-sm text-ink-dim">Ingen upload. Ingen konto.</p>
         </div>
-      </nav>
+      </header>
 
-      <main className="flex-grow flex flex-col items-center justify-center px-6 py-16 relative overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-primary-fixed/5 rounded-full blur-[120px] -z-10" />
+      <main id="main" className="flex-grow">
+        <section
+          aria-labelledby="title"
+          className={`mx-auto max-w-6xl px-4 sm:px-6 overflow-x-clip ${empty ? 'pt-12 sm:pt-20 pb-16' : 'pt-8 sm:pt-10 pb-12'}`}
+        >
+          <div className={empty ? 'grid lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] gap-10 lg:gap-16 items-center' : ''}>
+            <div className={empty ? '' : 'flex flex-wrap items-end justify-between gap-x-8 gap-y-2 mb-8'}>
+              <h1
+                id="title"
+                className={`font-display font-extrabold text-ink tracking-[-0.04em] ${
+                  empty ? 'text-[clamp(2.75rem,7vw,5.25rem)] leading-[0.95]' : 'text-3xl sm:text-4xl leading-tight'
+                }`}
+              >
+                Ret metadata i din musik.
+              </h1>
+              <p className={`text-ink-dim ${empty ? 'mt-6 text-lg max-w-[42ch]' : 'max-w-[52ch]'}`}>
+                Titel, kunstner, album og cover i MP3 og M4A. Det hele sker i din browser, og de
+                felter du ikke rører, bliver i filen.
+              </p>
+              {empty && (
+                <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
+                  <button
+                    type="button"
+                    onClick={pick}
+                    className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 font-display font-semibold text-white shadow-lip transition-[transform,box-shadow] duration-150 hover:-translate-y-px hover:shadow-lip-hover active:translate-y-[2px] active:shadow-lip-pressed motion-reduce:transition-none"
+                  >
+                    <Icon name="add" className="w-5 h-5" />
+                    Vælg filer
+                  </button>
+                  <span className="text-sm text-ink-dim">eller træk dem ind på coveret</span>
+                </div>
+              )}
+            </div>
 
-        <header className="text-center mb-10 max-w-2xl mx-auto">
-          <h1 className="font-display text-display text-on-background mb-4">
-            Ret metadata i din musik
-          </h1>
-          <p className="font-body-lg text-secondary max-w-lg mx-auto">
-            Alt sker i din browser. Felter du ikke rører, bliver hvor de er.
-          </p>
-        </header>
-
-        <section className={`w-full ${files.length === 0 ? 'max-w-2xl' : 'max-w-5xl'}`}>
-          {/* Kept mounted so screen readers announce the message when it appears. */}
-          <div role="alert">
-            {error && (
-              <div className="mb-4 px-4 py-3 rounded-2xl bg-error-container border border-error/30 text-sm text-error font-body-md">
-                {error}
-              </div>
+            {empty && (
+              <button
+                type="button"
+                {...dropHandlers}
+                onClick={pick}
+                aria-label="Vælg musikfiler, eller slip dem her"
+                className="group relative block w-full max-w-[440px] mx-auto lg:mx-0 aspect-square"
+              >
+                {/* The record peeks out of the sleeve, and slides further out on hover. */}
+                <span
+                  aria-hidden="true"
+                  className={`absolute inset-y-[6%] right-0 aspect-square rounded-full bg-ink transition-transform duration-300 ease-out motion-reduce:transition-none ${
+                    dragOver ? 'translate-x-[22%]' : 'translate-x-[10%] group-hover:translate-x-[16%]'
+                  }`}
+                  style={{ backgroundImage: 'repeating-radial-gradient(circle at center, rgb(255 255 255 / 0.06) 0 1px, transparent 1px 5px)' }}
+                >
+                  <span className="absolute inset-[34%] rounded-full bg-mint" />
+                  <span className="absolute inset-[48.5%] rounded-full bg-ink" />
+                </span>
+                <span
+                  className={`cut absolute inset-0 right-[10%] flex flex-col justify-between p-6 sm:p-8 text-left shadow-print transition-colors ${
+                    dragOver ? 'bg-brand-tint' : 'bg-surface'
+                  }`}
+                >
+                  <span className="eyebrow text-ink-dim">Side A</span>
+                  {/* An empty track list, waiting for its titles. */}
+                  <span aria-hidden="true" className="flex flex-col gap-3.5">
+                    {['w-3/4', 'w-1/2', 'w-2/3'].map((w, i) => (
+                      <span key={w} className="flex items-center gap-4">
+                        <span className="font-display text-sm tabular-nums text-ink-dim/60">0{i + 1}</span>
+                        <span className={`h-2 rounded-full bg-sunken ${w}`} />
+                      </span>
+                    ))}
+                  </span>
+                  <span>
+                    <span className="block font-display text-2xl sm:text-3xl font-bold tracking-[-0.03em] text-ink">
+                      {busy ? 'Læser filer…' : 'Slip filerne her'}
+                    </span>
+                    <span className="mt-2 block text-ink-dim">MP3 og M4A, gerne flere ad gangen.</span>
+                  </span>
+                </span>
+              </button>
             )}
           </div>
 
-          {files.length === 0 ? (
-            <button
-              type="button"
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setDragOver(false); void addFiles(e.dataTransfer.files); }}
-              onClick={() => inputRef.current?.click()}
-              className={`block w-full cursor-pointer rounded-3xl border-2 border-dashed transition-colors px-6 py-16 sm:p-16 text-center bg-white outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
-                dragOver
-                  ? 'border-primary-fixed bg-primary-fixed/5'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <Icon name="music_note" className="w-12 h-12 text-slate-300 mb-4" />
-              <span className="block font-headline-md text-on-surface mb-1">
-                {busy ? 'Læser filer…' : 'Træk dine musikfiler herind'}
-              </span>
-              <span className="block font-body-md text-secondary">eller klik for at vælge</span>
-            </button>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6">
-              <aside className="bg-white rounded-3xl border border-slate-100 shadow-[0_8px_40px_rgba(0,0,0,0.06)] p-3 h-fit">
-                <div className="flex items-center justify-between pl-3 py-1">
-                  <span className="font-label-md uppercase tracking-widest text-on-surface-variant text-xs">
-                    Filer ({files.length})
-                  </span>
-                  <div className="flex items-center gap-1">
+          {/* Kept mounted so screen readers announce the message when it appears. */}
+          <div role="alert">
+            {error && (
+              <p className="mt-8 rounded-field border border-danger/30 bg-danger-tint px-4 py-3 text-sm text-danger">
+                {error}
+              </p>
+            )}
+          </div>
+
+          {!empty && (
+            <div className="mt-6 grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-6 items-start">
+              <aside
+                {...dropHandlers}
+                aria-label="Dine filer"
+                className={`cut p-4 sm:p-5 shadow-print transition-colors ${dragOver ? 'bg-brand-tint' : 'bg-surface'}`}
+              >
+                <div className="flex items-center justify-between gap-2 pb-3 mb-2 border-b border-line">
+                  <h2 className="eyebrow text-ink">
+                    Side A <span className="text-ink-dim font-medium">· {files.length === 1 ? '1 nummer' : `${files.length} numre`}</span>
+                  </h2>
+                  <div className="flex items-center gap-1 -mr-1">
                     <button
                       onClick={clearAll}
-                      className="h-9 px-3 rounded-lg font-label-sm text-secondary hover:text-error hover:bg-error-container/40 transition-colors"
-                      title="Ryd hele listen"
+                      className="h-9 px-3 rounded-full text-sm text-ink-dim hover:text-danger hover:bg-danger-tint transition-colors"
                     >
                       Ryd
                     </button>
                     <button
-                      onClick={() => inputRef.current?.click()}
-                      className="w-9 h-9 flex items-center justify-center rounded-lg text-primary hover:bg-primary-fixed/20 transition-colors"
-                      title="Tilføj flere"
+                      onClick={pick}
                       aria-label="Tilføj flere filer"
+                      title="Tilføj flere filer"
+                      className="w-9 h-9 flex items-center justify-center rounded-full text-brand hover:bg-brand-tint transition-colors"
                     >
                       <Icon name="add" className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
-                <ul className="space-y-1 max-h-[420px] overflow-y-auto">
-                  {files.map((f) => (
+                <ol className="max-h-[440px] overflow-y-auto -mx-1 px-1">
+                  {files.map((f, i) => (
                     <li key={f.id} className="group relative">
                       <button
                         onClick={() => { setActiveId(f.id); setSaveNote(''); }}
                         title={f.file.name}
-                        className={`w-full text-left pl-3 pr-11 py-2 rounded-xl transition-colors flex items-center gap-2.5 ${
-                          f.id === activeId
-                            ? 'bg-primary-fixed/20 text-on-surface'
-                            : 'hover:bg-surface-container-low text-secondary'
+                        aria-current={f.id === activeId ? 'true' : undefined}
+                        className={`w-full text-left pl-2 pr-11 py-2.5 rounded-field transition-colors grid grid-cols-[2rem_minmax(0,1fr)] items-baseline gap-2 ${
+                          f.id === activeId ? 'bg-brand-tint' : 'hover:bg-sunken'
                         }`}
                       >
-                        <Icon
-                          name={f.saved ? 'check_circle' : f.dirty ? 'edit' : 'audio_file'}
-                          label={f.saved ? 'Gemt' : f.dirty ? 'Ugemte ændringer' : undefined}
-                          className="w-4 h-4 shrink-0 opacity-60"
-                        />
-                        <span className="min-w-0 flex flex-col">
-                          <span className="font-body-md text-sm truncate-fname">
-                            {f.editable.title || f.file.name}
+                        <span
+                          className={`font-display text-sm tabular-nums ${f.id === activeId ? 'text-brand font-semibold' : 'text-ink-dim'}`}
+                        >
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate-fname font-medium text-ink">
+                              {f.editable.title || f.file.name}
+                            </span>
+                            {(f.saved || f.dirty) && (
+                              <Icon
+                                name={f.saved ? 'check_circle' : 'edit'}
+                                label={f.saved ? 'Gemt' : 'Ugemte ændringer'}
+                                className={`w-3.5 h-3.5 ${f.saved ? 'text-brand' : 'text-ink-dim'}`}
+                              />
+                            )}
                           </span>
                           {f.editable.title && (
-                            <span className="text-xs text-on-surface-variant truncate-fname">
-                              {f.file.name}
-                            </span>
+                            <span className="block text-xs text-ink-dim truncate-fname">{f.file.name}</span>
                           )}
                         </span>
                       </button>
@@ -297,20 +365,21 @@ export default function App() {
                         onClick={() => removeFile(f.id)}
                         aria-label={`Fjern ${f.editable.title || f.file.name} fra listen`}
                         title="Fjern fra listen"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-lg text-secondary hover:bg-white hover:text-error transition-[color,background-color,opacity] [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full text-ink-dim hover:bg-surface hover:text-danger transition-[color,background-color,opacity] [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
                       >
                         <Icon name="close" className="w-4 h-4" />
                       </button>
                     </li>
                   ))}
-                </ul>
+                </ol>
               </aside>
 
-              <div className="min-w-0 bg-white rounded-3xl border border-slate-100 shadow-[0_8px_40px_rgba(0,0,0,0.06)] p-5 sm:p-8">
+              <div className="cut min-w-0 bg-surface shadow-print p-5 sm:p-8">
                 {active && (
                   <TagEditor
                     key={active.id}
                     loaded={active}
+                    trackNumber={files.indexOf(active) + 1}
                     busy={busy}
                     pattern={pattern}
                     onPatternChange={setPattern}
@@ -325,6 +394,8 @@ export default function App() {
           )}
         </section>
 
+        <About />
+
         <input
           ref={inputRef}
           type="file"
@@ -334,6 +405,20 @@ export default function App() {
           onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ''; }}
         />
       </main>
+
+      <footer className="border-t border-line">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 flex flex-wrap items-center justify-between gap-4 text-sm text-ink-dim">
+          <p>
+            <span className="font-display font-bold text-ink">Localify</span> kører kun i din browser.
+          </p>
+          <a
+            href="https://github.com/williloft/localify"
+            className="underline underline-offset-4 decoration-line hover:decoration-brand hover:text-brand"
+          >
+            Kildekoden på GitHub
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }
