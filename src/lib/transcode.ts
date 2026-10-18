@@ -59,6 +59,23 @@ export interface TranscodeOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * The browser could not decode the audio. Usually the browser lacks an AAC
+ * decoder (some Linux builds of Chromium and Firefox), more rarely the file is
+ * DRM-protected or damaged. Either way, saving as M4A still works, because that
+ * path never decodes the audio.
+ */
+export class DecodeError extends Error {
+  constructor() {
+    super(
+      'Din browser kan ikke afkode lyden i filen, så den kan ikke laves om til MP3 her. ' +
+      'Gem den som M4A i stedet, eller prøv i Chrome eller Safari. ' +
+      'Er filen kopibeskyttet (DRM), kan den ikke konverteres.'
+    );
+    this.name = 'DecodeError';
+  }
+}
+
 /** Decode with the browser's own decoder, then encode to MP3 in a worker. */
 export async function m4aToMp3(
   buffer: ArrayBuffer,
@@ -75,7 +92,7 @@ export async function m4aToMp3(
   try {
     audio = await ctx.decodeAudioData(forDecode);
   } catch {
-    throw new Error('Kunne ikke afkode lyden. Filen kan være beskyttet (DRM) eller beskadiget.');
+    throw new DecodeError();
   } finally {
     // Nothing is played, so the context has done its job either way.
     void ctx.close();

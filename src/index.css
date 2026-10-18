@@ -73,7 +73,7 @@
   }
 
   .skip-link {
-    position: absolute;
+    position: fixed;
     left: 16px;
     top: -100px;
     z-index: 100;

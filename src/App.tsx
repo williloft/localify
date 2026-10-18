@@ -9,6 +9,7 @@ import {
   type CoverArt,
 } from './lib/tags';
 import { buildFilename, type NamePattern } from './lib/filename';
+import { DecodeError } from './lib/transcode';
 import { fieldLabels } from './lib/fieldLabels';
 import { TagEditor } from './TagEditor';
 import { About } from './About';
@@ -52,6 +53,8 @@ export default function App() {
   const [error, setError] = useState('');
   /** Problems from the last save, shown next to the save button rather than above the list. */
   const [saveNote, setSaveNote] = useState('');
+  /** The last save failed only because the browser cannot decode AAC; M4A would work. */
+  const [offerM4a, setOfferM4a] = useState(false);
   const [pattern, setPatternState] = useState<NamePattern>(storedPattern);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -133,6 +136,7 @@ export default function App() {
     if (!active) return;
     setBusy(true);
     setSaveNote('');
+    setOfferM4a(false);
     setProgress(null);
     try {
       const buf = await bufferOf(active.file);
@@ -172,6 +176,7 @@ export default function App() {
       );
     } catch (e) {
       setSaveNote(e instanceof Error ? e.message : 'Noget gik galt under skrivning. Prøv igen.');
+      setOfferM4a(e instanceof DecodeError);
     } finally {
       setBusy(false);
       setProgress(null);
@@ -264,7 +269,8 @@ export default function App() {
                     <Icon name="add" className="w-5 h-5" />
                     Vælg filer
                   </button>
-                  <span className="text-sm text-ink-dim">eller træk dem ind på coveret</span>
+                  {/* Phones can't drag files, so the hint only shows where a mouse can. */}
+                  <span className="hidden [@media(pointer:fine)]:inline text-sm text-ink-dim">eller træk dem ind på coveret</span>
                 </div>
               )}
             </div>
@@ -305,7 +311,12 @@ export default function App() {
                   </span>
                   <span>
                     <span className="block font-display text-2xl sm:text-3xl font-bold tracking-[-0.03em] text-ink">
-                      {busy ? 'Læser filer…' : 'Slip filerne her'}
+                      {busy ? 'Læser filer…' : (
+                        <>
+                          <span className="[@media(pointer:fine)]:hidden">Tryk for at vælge</span>
+                          <span className="hidden [@media(pointer:fine)]:inline">Slip filerne her</span>
+                        </>
+                      )}
                     </span>
                     <span className="mt-2 block text-ink-dim">MP3 og M4A, gerne flere ad gangen.</span>
                   </span>
@@ -355,7 +366,7 @@ export default function App() {
                   {files.map((f, i) => (
                     <li key={f.id} className="group relative">
                       <button
-                        onClick={() => { setActiveId(f.id); setSaveNote(''); }}
+                        onClick={() => { setActiveId(f.id); setSaveNote(''); setOfferM4a(false); }}
                         title={f.file.name}
                         aria-current={f.id === activeId ? 'true' : undefined}
                         className={`w-full text-left pl-2 pr-11 py-2.5 rounded-field transition-colors grid grid-cols-[2rem_minmax(0,1fr)] items-baseline gap-2 ${
@@ -409,6 +420,7 @@ export default function App() {
                     onPatternChange={setPattern}
                     progress={progress}
                     saveNote={saveNote}
+                    onUseM4a={offerM4a ? () => { updateActive({ outputFormat: 'm4a' }); setSaveNote(''); setOfferM4a(false); } : undefined}
                     onChange={updateActive}
                     onSave={save}
                   />

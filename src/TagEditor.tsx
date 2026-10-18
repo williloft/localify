@@ -17,6 +17,8 @@ interface Props {
   progress: number | null;
   /** Problems from the last save of this file, or ''. */
   saveNote: string;
+  /** Set when the save failed because the browser cannot decode AAC. */
+  onUseM4a?: () => void;
   onChange: (patch: Partial<LoadedFile>) => void;
   onSave: () => void;
 }
@@ -40,7 +42,7 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange, progress, saveNote, onChange, onSave }: Props) {
+export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange, progress, saveNote, onUseM4a, onChange, onSave }: Props) {
   const { read, editable, cover, file } = loaded;
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverDrag, setCoverDrag] = useState(false);
@@ -182,7 +184,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
               value={editable[key]}
               onChange={(e) => setField(key, e.target.value)}
               placeholder={placeholder}
-              className={`w-full rounded-field border border-outline bg-surface px-3.5 py-2.5 text-ink outline-none transition-colors placeholder:italic placeholder:text-ink-dim/70 hover:border-ink focus-visible:border-brand focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand ${numeric ? 'tabular-nums' : ''}`}
+              className={`w-full rounded-field border border-outline bg-surface px-3.5 py-2.5 text-ink outline-none transition-colors placeholder:italic placeholder:text-ink-dim hover:border-ink focus-visible:border-brand focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand ${numeric ? 'tabular-nums' : ''}`}
             />
           </div>
         ))}
@@ -294,9 +296,18 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
         {/* Next to the button that caused it, so it lands in view on a phone. */}
         <div role="alert">
           {saveNote && (
-            <p className="rounded-field border border-danger/30 bg-danger-tint px-4 py-3 text-sm text-danger">
-              {saveNote}
-            </p>
+            <div className="rounded-field border border-danger/30 bg-danger-tint px-4 py-3 text-sm text-danger">
+              <p>{saveNote}</p>
+              {onUseM4a && (
+                <button
+                  type="button"
+                  onClick={onUseM4a}
+                  className="mt-3 inline-flex h-10 items-center rounded-full border border-danger/40 bg-surface px-4 font-display font-semibold text-ink hover:border-ink transition-colors"
+                >
+                  Skift til M4A
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
