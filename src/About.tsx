@@ -25,8 +25,8 @@ const NOTES: { title: string; body: string }[] = [
 
 const FAQ: { q: string; a: string }[] = [
   {
-    q: 'Hvorfor bliver M4A gemt som MP3?',
-    a: 'MP3 kan afspilles overalt, også som lokale filer i Spotify, der ikke tager M4A. Vil du beholde lyden præcis som den er, vælger du M4A under “Gem som”.',
+    q: 'Hvorfor foreslår Localify MP3 til M4A-filer?',
+    a: 'Spotifys lokale filer tager ikke M4A, så MP3 er valgt på forhånd. MP3 kan afspilles overalt, men lyden kodes om, og det står der, før du gemmer. Vil du beholde lyden præcis som den er, vælger du M4A under “Gem som”.',
   },
   {
     q: 'Bliver min originale fil ændret?',
