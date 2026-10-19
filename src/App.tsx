@@ -48,7 +48,7 @@ async function bufferOf(file: File): Promise<ArrayBuffer> {
   return await file.arrayBuffer();
 }
 
-/** What "Gem alle" reports when it is done: what was left out, and what went in with a warning. */
+/** What "Download alle som ZIP" reports when it is done: what was left out, and what went in with a warning. */
 interface BatchNote {
   stopped?: boolean;
   /** A whole-batch failure, such as a zip too large for the browser. */
@@ -121,7 +121,7 @@ export default function App() {
   const [saveNote, setSaveNote] = useState('');
   /** The last save failed only because the browser cannot decode AAC; M4A would work. */
   const [offerM4a, setOfferM4a] = useState(false);
-  /** Progress of "Gem alle", null when idle. */
+  /** Progress of "Download alle som ZIP", null when idle. */
   const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
   const [batchNote, setBatchNote] = useState<BatchNote | null>(null);
   /** Set by the Stop button; the batch checks it between files. */
@@ -352,7 +352,7 @@ export default function App() {
       {error}
     </p>
   ) : null;
-  /** While "Gem alle" runs, the list is locked so the zip matches what is on screen. */
+  /** While "Download alle som ZIP" runs, the list is locked so the zip matches what is on screen. */
   const locked = batch !== null;
 
   return (
@@ -545,7 +545,7 @@ export default function App() {
                       >
                         <Icon name="download" className="w-5 h-5" />
                         <span className="tabular-nums truncate-fname">
-                          {batch ? `Gemmer ${formatNumber(batch.done + 1)} af ${formatNumber(batch.total)}…` : 'Gem alle'}
+                          {batch ? `Gemmer ${formatNumber(batch.done + 1)} af ${formatNumber(batch.total)}…` : 'Download alle som ZIP'}
                         </span>
                       </button>
                       {batch && (
@@ -634,7 +634,7 @@ interface TrackRowProps {
   active: boolean;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
-  /** True while "Gem alle" runs: the row can be viewed but not removed. */
+  /** True while "Download alle som ZIP" runs: the row can be viewed but not removed. */
   locked: boolean;
 }
 
