@@ -296,11 +296,15 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
                 id="output-format"
                 value={loaded.outputFormat}
                 onChange={(e) => onChange({ outputFormat: e.target.value as AudioFormat })}
+                aria-describedby="output-format-hint"
                 className={SELECT}
               >
                 <option value="mp3">MP3, virker i Spotify</option>
                 <option value="m4a">M4A, lyden røres ikke</option>
               </select>
+              <p id="output-format-hint" className="text-xs text-ink-dim">
+                MP3 er foreslået, fordi Spotifys lokale filer ikke tager M4A. Vælg M4A, hvis du vil beholde formatet.
+              </p>
             </div>
           )}
           <div className="flex flex-col gap-1.5 min-w-0">
