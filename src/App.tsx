@@ -374,10 +374,10 @@ export default function App() {
             Localify
           </a>
           <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
-            <a href="#om" className="hidden sm:inline-flex h-10 items-center rounded-full px-3 text-sm font-medium text-ink-dim hover:text-ink hover:bg-sunken transition-colors">
+            <a href="#om" className="hidden sm:inline-flex h-10 items-center rounded-full px-3 text-[0.9375rem] font-medium text-ink/85 hover:text-ink hover:bg-sunken transition-colors">
               Sådan virker det
             </a>
-            <a href="#sporgsmal" className="inline-flex h-10 items-center whitespace-nowrap rounded-full px-2.5 sm:px-3 text-sm font-medium text-ink-dim hover:text-ink hover:bg-sunken transition-colors">
+            <a href="#sporgsmal" className="inline-flex h-10 items-center whitespace-nowrap rounded-full px-2.5 sm:px-3 text-[0.9375rem] font-medium text-ink/85 hover:text-ink hover:bg-sunken transition-colors">
               Spørgsmål
             </a>
             <button
@@ -605,17 +605,39 @@ export default function App() {
         />
       </main>
 
-      <footer className="border-t border-line">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 flex flex-wrap items-center justify-between gap-4 text-sm text-ink-dim">
-          <p>
-            <span className="font-display font-bold text-ink">Localify</span> kører kun i din browser.
-          </p>
-          <a
-            href="https://github.com/williloft/localify"
-            className="underline underline-offset-4 decoration-line hover:decoration-brand hover:text-brand"
-          >
-            Kildekoden på GitHub
-          </a>
+      {/* Short, like Lofty's: a green accent line, one line about the tool, then © and who made it. */}
+      <footer className="border-t-4 border-brand bg-surface">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-8 text-sm text-ink-dim">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pb-6">
+            <p>
+              <span className="font-display font-bold text-ink">Localify</span> kører kun i din browser.
+            </p>
+            <a
+              href="https://github.com/williloft/localify"
+              className="underline underline-offset-4 decoration-line hover:decoration-brand hover:text-brand"
+            >
+              Kildekoden på GitHub
+            </a>
+          </div>
+          <div className="flex flex-col gap-1 border-t border-line py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[0.8125rem]">© {new Date().getFullYear()} Localify</p>
+            <a
+              href="https://lofty-seven.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Lavet af William Loft Andersen (åbner i ny fane)"
+              className="group inline-flex min-h-11 items-center gap-1 self-start whitespace-nowrap text-[0.8125rem] sm:self-auto"
+            >
+              <span>Lavet af</span>
+              <span className="font-display text-sm font-bold tracking-[-0.02em] text-ink transition-colors duration-150 [@media(hover:hover)]:group-hover:text-brand">
+                Lofty
+              </span>
+              <Icon
+                name="arrow_up_right"
+                className="w-3.5 h-3.5 text-brand transition-transform duration-150 [@media(hover:hover)]:group-hover:translate-x-0.5 [@media(hover:hover)]:group-hover:-translate-y-0.5 motion-reduce:transition-none"
+              />
+            </a>
+          </div>
         </div>
       </footer>
 

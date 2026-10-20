@@ -13,6 +13,7 @@
 
 export type IconName =
   | 'add'
+  | 'arrow_up_right'
   | 'audio_file'
   | 'check_circle'
   | 'close'
@@ -32,6 +33,8 @@ interface Props {
 
 const PATHS: Record<IconName, React.ReactNode> = {
   add: <path d="M12 5v14M5 12h14" />,
+
+  arrow_up_right: <path d="M7 17L17 7M9 7h8v8" />,
 
   close: <path d="M6 6l12 12M18 6L6 18" />,
 
