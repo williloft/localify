@@ -15,6 +15,8 @@ import { fieldLabels, formatNumber, plural, skippedMessage } from './lib/fieldLa
 import { TagEditor } from './TagEditor';
 import { About } from './About';
 import { Icon } from './Icon';
+import { buttonClassName } from './ui';
+import { Notice } from './Notice';
 
 const PATTERN_KEY = 'localify:name-pattern';
 
@@ -348,9 +350,9 @@ export default function App() {
 
   const empty = files.length === 0;
   const errorBox = error ? (
-    <p className={`${empty ? 'mt-6' : 'mt-8'} rounded-field border border-danger/30 bg-danger-tint px-4 py-3 text-sm text-danger break-words`}>
-      {error}
-    </p>
+    <div className={empty ? 'mt-6' : 'mt-8'}>
+      <Notice tone="danger" icon="warning"><p className="break-words">{error}</p></Notice>
+    </div>
   ) : null;
   /** While "Download alle som ZIP" runs, the list is locked so the zip matches what is on screen. */
   const locked = batch !== null;
@@ -384,7 +386,7 @@ export default function App() {
               type="button"
               onClick={pick}
               disabled={locked}
-              className="ml-1 disabled:opacity-60 disabled:pointer-events-none inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full bg-brand px-4 sm:pl-3 font-display text-sm font-semibold text-white shadow-lip transition-[transform,box-shadow] duration-150 hover:-translate-y-px hover:shadow-lip-hover active:translate-y-[2px] active:shadow-lip-pressed motion-reduce:transition-none"
+              className={buttonClassName('primary', 'sm', 'ml-1 gap-1.5 sm:pl-3')}
             >
               <Icon name="add" className="hidden sm:block w-4 h-4" />
               {empty ? 'Vælg filer' : 'Tilføj'}
@@ -417,7 +419,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={pick}
-                    className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 font-display font-semibold text-white shadow-lip transition-[transform,box-shadow] duration-150 hover:-translate-y-px hover:shadow-lip-hover active:translate-y-[2px] active:shadow-lip-pressed motion-reduce:transition-none"
+                    className={buttonClassName('primary', 'md')}
                   >
                     <Icon name="add" className="w-5 h-5" />
                     Vælg filer
@@ -541,7 +543,7 @@ export default function App() {
                         type="button"
                         onClick={() => void saveAll()}
                         disabled={busy}
-                        className="flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-full border-2 border-brand bg-surface px-4 py-2.5 font-display font-semibold text-brand transition-colors hover:bg-brand-tint disabled:opacity-60 disabled:cursor-not-allowed"
+                        className={buttonClassName('secondary', 'md', 'flex-1 min-w-0')}
                       >
                         <Icon name="download" className="w-5 h-5" />
                         <span className="tabular-nums truncate-fname">
@@ -552,7 +554,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => { stopBatch.current = true; }}
-                          className="shrink-0 rounded-full border-2 border-line bg-surface px-4 font-display font-semibold text-ink hover:border-ink transition-colors"
+                          className={buttonClassName('secondary', 'md', 'shrink-0')}
                         >
                           Stop
                         </button>
@@ -729,17 +731,21 @@ function NoteList({ title, lines }: { title: string; lines: string[] }) {
 
 function BatchNoteView({ note }: { note: BatchNote }) {
   if (note.stopped) {
-    return <p className="mt-3 rounded-field border border-line bg-sunken px-3 py-2.5 text-sm text-ink">Stoppet. Der blev ikke gemt noget.</p>;
+    return <div className="mt-3"><Notice icon="close"><p>Stoppet. Der blev ikke gemt noget.</p></Notice></div>;
   }
   return (
-    <div className="mt-3 space-y-3 rounded-field border border-danger/30 bg-danger-tint px-3 py-2.5 text-sm text-danger break-words">
-      {note.failed && <p>{note.failed}</p>}
-      {note.skipped.length > 0 && (
-        <NoteList title={`${plural(note.skipped.length, 'fil kom', 'filer kom')} ikke med:`} lines={note.skipped} />
-      )}
-      {note.warnings.length > 0 && (
-        <NoteList title={`${plural(note.warnings.length, 'fil er gemt', 'filer er gemt')} med en advarsel:`} lines={note.warnings} />
-      )}
+    <div className="mt-3">
+      <Notice tone="danger" icon="warning">
+        <div className="space-y-3 break-words">
+          {note.failed && <p>{note.failed}</p>}
+          {note.skipped.length > 0 && (
+            <NoteList title={`${plural(note.skipped.length, 'fil kom', 'filer kom')} ikke med:`} lines={note.skipped} />
+          )}
+          {note.warnings.length > 0 && (
+            <NoteList title={`${plural(note.warnings.length, 'fil er gemt', 'filer er gemt')} med en advarsel:`} lines={note.warnings} />
+          )}
+        </div>
+      </Notice>
     </div>
   );
 }

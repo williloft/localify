@@ -5,6 +5,8 @@ import { mapM4aToId3 } from './lib/tags';
 import { buildFilename, PATTERNS, type NamePattern } from './lib/filename';
 import { fieldLabelList, fieldLabels, formatBytes, formatDuration, plural } from './lib/fieldLabels';
 import { Icon } from './Icon';
+import { Notice } from './Notice';
+import { buttonClassName, FIELD } from './ui';
 
 interface Props {
   loaded: LoadedFile;
@@ -45,9 +47,6 @@ const FIELDS: { key: keyof EditableTags; label: string; placeholder: string; spa
   { key: 'album', label: 'Album', placeholder: 'fx Årstiderne', span: 'md:col-span-4' },
   { key: 'year', label: 'År', placeholder: 'fx 1998', span: 'md:col-span-2', numeric: true },
 ];
-
-const SELECT =
-  'w-full min-w-0 appearance-auto rounded-field border border-outline bg-surface px-3 py-2.5 text-ink outline-none focus-visible:outline-2 focus-visible:outline-brand';
 
 function toDataUrl({ mime, data }: CoverArt): string {
   let bin = '';
@@ -233,10 +232,13 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
               value={editable[key]}
               onChange={(e) => setField(key, e.target.value)}
               placeholder={placeholder}
-              className={`w-full rounded-field border border-outline bg-surface px-3.5 py-2.5 text-ink outline-none transition-colors placeholder:italic placeholder:text-ink-dim hover:border-ink focus-visible:border-brand focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-brand ${numeric ? 'tabular-nums' : ''}`}
+              className={`${FIELD} placeholder:italic placeholder:text-ink-dim ${odd ? 'border-ink' : ''} ${numeric ? 'tabular-nums' : ''}`}
             />
             {odd && (
-              <p id={`hint-${key}`} className="text-xs text-ink-dim">{shape.hint}</p>
+              <p id={`hint-${key}`} className="flex items-start gap-1.5 text-xs text-ink-dim">
+                <Icon name="warning" className="w-3.5 h-3.5 shrink-0 mt-px" />
+                {shape.hint}
+              </p>
             )}
           </div>
           );
@@ -247,9 +249,8 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
       {(read.carriedNames.length > 0 || read.unsupported.length > 0) && (
         <div className="space-y-3">
           {read.carriedNames.length > 0 && (
-            <div className="flex items-start gap-3">
-              <Icon name="shield" className="w-5 h-5 shrink-0 text-brand mt-0.5" />
-              <p className="text-ink-dim">
+            <Notice icon="shield">
+              <p>
                 <strong className="font-semibold text-ink">
                   {plural(read.carriedNames.length, 'andet felt bevares', 'andre felter bevares')}
                 </strong>{' '}
@@ -271,18 +272,17 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
                   </>
                 ) : '.'}
               </p>
-            </div>
+            </Notice>
           )}
           {read.unsupported.length > 0 && (
-            <div className="flex items-start gap-3 rounded-field border border-danger/25 bg-danger-tint px-4 py-3">
-              <Icon name="warning" className="w-5 h-5 shrink-0 text-danger mt-0.5" />
-              <p className="text-ink">
+            <Notice tone="danger" icon="warning">
+              <p>
                 <strong className="font-semibold">
                   {plural(read.unsupported.length, 'felt kan', 'felter kan')} ikke skrives tilbage
                 </strong>{' '}
                 og går tabt, hvis du gemmer: <span title={read.unsupported.join(', ')}>{fieldLabels(read.unsupported)}</span>.
               </p>
-            </div>
+            </Notice>
           )}
         </div>
       )}
@@ -297,7 +297,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
                 value={loaded.outputFormat}
                 onChange={(e) => onChange({ outputFormat: e.target.value as AudioFormat })}
                 aria-describedby="output-format-hint"
-                className={SELECT}
+                className={FIELD}
               >
                 <option value="mp3">MP3, virker i Spotify</option>
                 <option value="m4a">M4A, lyden røres ikke</option>
@@ -313,7 +313,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
               id="name-pattern"
               value={pattern}
               onChange={(e) => onPatternChange(e.target.value as NamePattern)}
-              className={SELECT}
+              className={FIELD}
             >
               {PATTERNS.map((p) => (
                 <option key={p.value} value={p.value}>{p.label}</option>
@@ -323,26 +323,24 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
         </div>
 
         {converting && (
-          <p className="flex items-start gap-2.5 text-sm text-ink-dim">
-            <Icon name="warning" className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>
+          <Notice icon="warning">
+            <p>
               <strong className="font-semibold text-ink">Lyden kodes om.</strong> AAC til MP3 er
               komprimering oven på komprimering, så filen bliver en anelse ringere end originalen.
               Behold originalen.
-            </span>
-          </p>
+            </p>
+          </Notice>
         )}
 
         {converting && wouldDrop.length > 0 && (
-          <p className="flex items-start gap-2.5 rounded-field border border-danger/25 bg-danger-tint px-3 py-2.5 text-sm text-ink">
-            <Icon name="warning" className="w-4 h-4 shrink-0 text-danger mt-0.5" />
-            <span>
+          <Notice tone="danger" icon="warning">
+            <p>
               <strong className="font-semibold">
                 {plural(wouldDrop.length, 'felt har', 'felter har')} intet MP3-modstykke
               </strong>{' '}
               og går tabt ved konvertering: <span title={wouldDrop.join(', ')}>{fieldLabels(wouldDrop)}</span>.
-            </span>
-          </p>
+            </p>
+          </Notice>
         )}
 
         <p className="text-sm text-ink-dim truncate-fname" title={previewName}>
@@ -354,7 +352,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
         <button
           onClick={onSave}
           disabled={busy}
-          className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-brand px-6 py-4 font-display text-lg font-semibold text-white shadow-lip transition-[transform,box-shadow] duration-150 hover:-translate-y-px hover:shadow-lip-hover active:translate-y-[2px] active:shadow-lip-pressed disabled:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed motion-reduce:transition-none"
+          className={buttonClassName('primary', 'lg', 'w-full disabled:translate-y-0')}
         >
           <Icon name="download" />
           <span className="tabular-nums">
@@ -369,18 +367,18 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
         {/* Next to the button that caused it, so it lands in view on a phone. */}
         <div role="alert">
           {saveNote && (
-            <div className="rounded-field border border-danger/30 bg-danger-tint px-4 py-3 text-sm text-danger">
+            <Notice tone="danger" icon="warning">
               <p>{saveNote}</p>
               {onUseM4a && (
                 <button
                   type="button"
                   onClick={onUseM4a}
-                  className="mt-3 inline-flex h-10 items-center rounded-full border border-danger/40 bg-surface px-4 font-display font-semibold text-ink hover:border-ink transition-colors"
+                  className={buttonClassName('secondary', 'sm', 'mt-3')}
                 >
                   Skift til M4A
                 </button>
               )}
-            </div>
+            </Notice>
           )}
         </div>
       </div>
