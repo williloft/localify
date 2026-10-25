@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LoadedFile } from './App';
 import type { AudioFormat, CoverArt, EditableTags } from './lib/tags';
 import { mapM4aToId3 } from './lib/tags';
@@ -38,6 +38,8 @@ const SHAPES: Partial<Record<keyof EditableTags, { ok: RegExp; hint: string }>> 
 /** Covers most players show, and the size past which a cover mostly adds weight. */
 const SAFE_COVER = new Set(['image/jpeg', 'image/png']);
 const BIG_COVER = 2 * 1024 * 1024;
+/** Covers up to this size are turned into a data URL right away; larger ones in the background. */
+const SYNC_COVER = 512 * 1024;
 
 const FIELDS: { key: keyof EditableTags; label: string; placeholder: string; span: string; numeric?: boolean }[] = [
   { key: 'title', label: 'Titel', placeholder: 'fx Blæsten går frisk', span: 'md:col-span-4' },
@@ -71,7 +73,20 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
 
   // A data URL has nothing to revoke, so remounts and StrictMode re-runs can
   // never leave the <img> pointing at a dead blob: URL.
-  const coverUrl = useMemo(() => (cover ? toDataUrl(cover) : null), [cover]);
+  // Encoding a cover of many megabytes on the main thread freezes the page for
+  // seconds, so large ones are encoded by the browser in the background. Small
+  // ones stay synchronous, so switching tracks never flashes an empty sleeve.
+  const syncUrl = useMemo(() => (cover && cover.data.byteLength <= SYNC_COVER ? toDataUrl(cover) : null), [cover]);
+  const [asyncUrl, setAsyncUrl] = useState<{ cover: CoverArt; url: string } | null>(null);
+  useEffect(() => {
+    if (!cover || cover.data.byteLength <= SYNC_COVER) return;
+    const reader = new FileReader();
+    reader.onload = () => setAsyncUrl({ cover, url: reader.result as string });
+    reader.readAsDataURL(new Blob([cover.data as BlobPart], { type: cover.mime }));
+    return () => reader.abort();
+  }, [cover]);
+  // Only the URL made from this very cover counts, never one left from the previous track.
+  const coverUrl = syncUrl ?? (asyncUrl && asyncUrl.cover === cover ? asyncUrl.url : null);
   const coverBroken = coverUrl !== null && coverUrl === brokenUrl;
 
   // Any image is accepted and kept, but say so when players may not show it.

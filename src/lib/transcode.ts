@@ -70,7 +70,7 @@ export class DecodeError extends Error {
     super(
       'Din browser kan ikke afkode lyden i filen, så den kan ikke laves om til MP3 her. ' +
       'Gem den som M4A i stedet, eller prøv i Chrome eller Safari. ' +
-      'Er filen kopibeskyttet (DRM), kan den ikke konverteres.'
+      'Er filen kopibeskyttet (DRM) eller beskadiget, kan den ikke konverteres.'
     );
     this.name = 'DecodeError';
   }

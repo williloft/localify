@@ -75,9 +75,31 @@ export function acceptsFile(name: string): boolean {
   return /\.(mp3|m4a|m4b|mp4|aac)$/i.test(name);
 }
 
+/**
+ * A file that could not be read, with a message meant for the person who
+ * picked it. The parsers' own errors ("ID3v2 tag size 813 exceeds…") say
+ * nothing to them, so they are replaced, not passed on.
+ */
+export class ReadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ReadError';
+  }
+}
+
+const DAMAGED = 'Filen er beskadiget eller ufuldstændig og kan ikke læses.';
+
 export async function readFileTags(buffer: ArrayBuffer): Promise<FileTags> {
+  try {
+    return await readKnownFormat(buffer);
+  } catch (e) {
+    throw e instanceof ReadError ? e : new ReadError(DAMAGED);
+  }
+}
+
+async function readKnownFormat(buffer: ArrayBuffer): Promise<FileTags> {
   const format = sniffFormat(buffer);
-  if (!format) throw new Error('Ukendt filformat — kun MP3 og M4A understøttes.');
+  if (!format) throw new ReadError('Ukendt filformat — kun MP3 og M4A understøttes.');
 
   if (format === 'mp3') {
     const r = await readId3(buffer);

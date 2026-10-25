@@ -256,11 +256,12 @@ export function writeTags({ buffer, editable, cover, carried }: WriteInput): Wri
 
   if (cover) {
     const data = cover.data;
+    // Labelled apart from carried APIC frames, which read "Ekstra billede".
     set('APIC', {
       type: 3,
       data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
       description: 'Cover',
-    });
+    }, 'Coverbillede');
   }
 
   writer.addTag();

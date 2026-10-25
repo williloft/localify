@@ -68,4 +68,53 @@ const meta = [
 ff(['-f', 'lavfi', '-i', 'sine=frequency=440:duration=3', '-c:a', 'aac', '-b:a', '192k', ...meta, '-y', `${DIR}/tagged.m4a`]);
 ff(['-i', `${DIR}/tagged.m4a`, '-c', 'copy', '-movflags', '+faststart', '-y', `${DIR}/faststart.m4a`]);
 
+// --- malformed files ---------------------------------------------------
+// Small, generated, never real music. Each one is a way a file picked by the
+// user can be broken; test/malformed.test.ts checks that none of them freeze
+// the reader, and that each fails (or loads) on its own.
+const mp3 = readFileSync(`${DIR}/tagged.mp3`);
+const m4a = readFileSync(`${DIR}/tagged.m4a`);
+
+// Cut mid-audio, and cut inside the ID3 tag so its header promises more bytes than exist.
+writeFileSync(`${DIR}/bad-truncated-audio.mp3`, mp3.subarray(0, Math.floor(mp3.length * 0.6)));
+writeFileSync(`${DIR}/bad-truncated-tag.mp3`, mp3.subarray(0, 300));
+
+// An MP4 whose first stsd sample entry claims size 0 (GHSA-f94x-6692-553q).
+{
+  const b = Buffer.from(m4a);
+  const at = b.indexOf('stsd');
+  if (at < 4) throw new Error('fandt ingen stsd i tagged.m4a');
+  // stsd: size(4) 'stsd'(4) version/flags(4) entry_count(4), then the first entry's size.
+  b.writeUInt32BE(0, at + 4 + 4 + 4);
+  writeFileSync(`${DIR}/bad-stsd-zero.m4a`, b);
+}
+
+// Covers: bytes that claim to be PNG but are not, and one far too large to be reasonable.
+const coverTags = (data, mime = 'image/png') => ({
+  title: 'Cover-test',
+  image: { mime, type: { id: 3, name: 'front cover' }, description: 'Cover', imageBuffer: data },
+});
+const base = readFileSync(`${DIR}/base.mp3`);
+writeFileSync(`${DIR}/bad-cover-defect.mp3`, NodeID3.write(coverTags(Buffer.from('ikke et billede, bare tekst')), base));
+// 12 MB: a valid PNG header followed by filler. Larger than any sane cover.
+const huge = Buffer.alloc(12 * 1024 * 1024, 0x41);
+cover.copy(huge, 0, 0, 16);
+writeFileSync(`${DIR}/bad-cover-huge.mp3`, NodeID3.write(coverTags(huge), base));
+
+// Wrong extensions: an M4A named .mp3, an MP3 named .m4a, and a PNG named .mp3.
+writeFileSync(`${DIR}/bad-m4a-named.mp3`, m4a);
+writeFileSync(`${DIR}/bad-mp3-named.m4a`, mp3);
+writeFileSync(`${DIR}/bad-png-named.mp3`, cover);
+
+// HTML and control characters in title and artist. The filename part is
+// tested in malformed.test.ts, since a real filename cannot hold every one of them.
+writeFileSync(
+  `${DIR}/bad-html-tags.mp3`,
+  NodeID3.write({
+    title: '<img src=x onerror=alert(1)>\u0007Titel\u0000',
+    artist: '<b>Fed</b>\u001b[31m Kunstner',
+    album: '</textarea><script>alert(1)</script>',
+  }, base)
+);
+
 console.log('fixtures skrevet til', DIR);

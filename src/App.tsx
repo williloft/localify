@@ -1,6 +1,7 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import {
   readFileTags,
+  ReadError,
   saveFile,
   acceptsFile,
   type AudioFormat,
@@ -142,12 +143,16 @@ export default function App() {
     const all = Array.from(incoming);
     const list = all.filter((f) => acceptsFile(f.name));
     const rejected = all.filter((f) => !acceptsFile(f.name)).map((f) => f.name);
-    setError(rejected.length > 0 ? skippedMessage(rejected) : '');
+    // One line per problem, each naming the file it is about.
+    const problems: string[] = rejected.length > 0 ? [skippedMessage(rejected)] : [];
+    setError(problems.join('\n'));
     if (list.length === 0) return;
 
     setBusy(true);
     const loaded: LoadedFile[] = [];
     for (const file of list) {
+      // Let the page paint between files, so a long batch shows it is working.
+      await new Promise((resolve) => setTimeout(resolve, 0));
       try {
         // Buffer is scoped to this iteration so a large batch doesn't pin
         // every file's bytes in memory at once.
@@ -165,8 +170,10 @@ export default function App() {
           // everywhere, and the one Spotify's local files actually accept.
           outputFormat: 'mp3',
         });
-      } catch {
-        setError((e) => `${e} Kunne ikke læse "${file.name}".`.trim());
+      } catch (e) {
+        const why = e instanceof ReadError ? e.message : 'Filen kunne ikke læses.';
+        problems.push(`“${file.name}”: ${why}`);
+        setError(problems.join('\n'));
       }
     }
     setBusy(false);
@@ -351,7 +358,7 @@ export default function App() {
   const empty = files.length === 0;
   const errorBox = error ? (
     <div className={empty ? 'mt-6' : 'mt-8'}>
-      <Notice tone="danger" icon="warning"><p className="break-words">{error}</p></Notice>
+      <Notice tone="danger" icon="warning"><p className="break-words whitespace-pre-line">{error}</p></Notice>
     </div>
   ) : null;
   /** While "Download alle som ZIP" runs, the list is locked so the zip matches what is on screen. */
