@@ -17,6 +17,8 @@ interface Props {
   busy: boolean;
   pattern: NamePattern;
   onPatternChange: (p: NamePattern) => void;
+  remember: boolean;
+  onRememberChange: (on: boolean) => void;
   /** 0..1 while re-encoding, null otherwise. */
   progress: number | null;
   /** Problems from the last save of this file, or ''. */
@@ -64,7 +66,7 @@ function toDataUrl({ mime, data }: CoverArt): string {
 /** How many preserved fields show before the rest fold behind "+N mere". */
 const CARRIED_SHOWN = 8;
 
-export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange, progress, saveNote, onUseM4a, onChange, onSave }: Props) {
+export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange, remember, onRememberChange, progress, saveNote, onUseM4a, onChange, onSave }: Props) {
   const { read, editable, cover, file } = loaded;
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [coverDrag, setCoverDrag] = useState(false);
@@ -331,6 +333,15 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
                 <option key={p.value} value={p.value}>{p.label}</option>
               ))}
             </select>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-ink-dim">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => onRememberChange(e.target.checked)}
+                className="h-4 w-4 accent-brand"
+              />
+              Husk på denne enhed
+            </label>
           </div>
         </div>
 

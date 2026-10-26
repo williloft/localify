@@ -22,21 +22,11 @@ import { About } from './About';
 import { Icon } from './Icon';
 import { buttonClassName } from './ui';
 import { Notice } from './Notice';
-
-const PATTERN_KEY = 'localify:name-pattern';
+import { Privacy } from './Privacy';
+import { rememberedPattern, writePattern } from './lib/remember';
 
 // Worst-case data switch for break-ui. Dev builds only; production drops the import.
 const DataToggle = import.meta.env.DEV ? lazy(() => import('./dev/DataToggle')) : null;
-
-/** Reading storage throws in some privacy contexts, so never let it break boot. */
-function storedPattern(): NamePattern {
-  try {
-    const v = localStorage.getItem(PATTERN_KEY);
-    return (v as NamePattern) || 'title-artist';
-  } catch {
-    return 'title-artist';
-  }
-}
 
 export interface LoadedFile {
   id: string;
@@ -214,7 +204,9 @@ export default function App() {
   const [batchNote, setBatchNote] = useState<BatchNote | null>(null);
   /** Aborted by the Stop button: cuts a conversion short and terminates the zip worker. */
   const stopBatch = useRef<AbortController | null>(null);
-  const [pattern, setPatternState] = useState<NamePattern>(storedPattern);
+  const [pattern, setPatternState] = useState<NamePattern>(() => rememberedPattern() ?? 'title-artist');
+  /** Opt-in: the pattern is kept on this device only while this is on. */
+  const [remember, setRemember] = useState(() => rememberedPattern() !== null);
   const inputRef = useRef<HTMLInputElement>(null);
   const activeSection = useActiveSection(NAV_IDS);
   /** Files marked for a shared edit. Separate from the file open in the editor. */
@@ -226,8 +218,13 @@ export default function App() {
 
   const setPattern = useCallback((next: NamePattern) => {
     setPatternState(next);
-    try { localStorage.setItem(PATTERN_KEY, next); } catch { /* not fatal */ }
-  }, []);
+    if (remember) writePattern(next);
+  }, [remember]);
+
+  const changeRemember = useCallback((on: boolean) => {
+    setRemember(on);
+    writePattern(on ? pattern : null);
+  }, [pattern]);
 
   const active = files.find((f) => f.id === activeId) ?? null;
   // What "Download alle som ZIP" would change, per file and in total. Cached per file object.
@@ -810,6 +807,8 @@ export default function App() {
                     busy={busy}
                     pattern={pattern}
                     onPatternChange={setPattern}
+                    remember={remember}
+                    onRememberChange={changeRemember}
                     progress={progress}
                     saveNote={saveNote}
                     onUseM4a={offerM4a ? () => { updateActive({ outputFormat: 'm4a' }); setSaveNote(''); setOfferM4a(false); } : undefined}
@@ -824,6 +823,7 @@ export default function App() {
         </section>
 
         <About />
+        <Privacy />
 
         <input
           ref={inputRef}
@@ -853,6 +853,7 @@ export default function App() {
             <h2 className={FOOTER_HEADING}>Siden</h2>
             <a href="#om" className={FOOTER_LINK}>Sådan virker det</a>
             <a href="#sporgsmal" className={FOOTER_LINK}>Spørgsmål</a>
+            <a href="#privatliv" className={FOOTER_LINK}>Privatliv</a>
             <a href="https://github.com/williloft/localify" className={FOOTER_LINK}>Kildekoden på GitHub</a>
           </nav>
 

@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "tsx test/roundtrip.test.ts && tsx test/filename.test.ts && tsx test/mp4.test.ts && tsx test/encode.test.ts && tsx test/malformed.test.ts && tsx test/zip.test.ts && tsx test/shared.test.ts && tsx test/changes.test.ts",
+    "test": "tsx test/roundtrip.test.ts && tsx test/filename.test.ts && tsx test/mp4.test.ts && tsx test/encode.test.ts && tsx test/malformed.test.ts && tsx test/zip.test.ts && tsx test/shared.test.ts && tsx test/changes.test.ts && tsx test/privacy.test.ts",
     "fixtures": "node test/make-fixtures.mjs",
     "pretest": "node test/make-fixtures.mjs"
   },
