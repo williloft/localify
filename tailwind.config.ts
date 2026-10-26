@@ -18,12 +18,12 @@ const config: Config = {
         sans: ["'Hanken Grotesk Variable'", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
-        paper: "#f6f5f2",
-        sunken: "#eceae5",
+        paper: "#fbfaf7",
+        sunken: "#f3f1ec",
         surface: "#ffffff",
         ink: "#171a21",
         "ink-dim": "#5a616c",
-        line: "#d9d6cf",
+        line: "#dedbd3",
         // Field borders: 3:1 against white, as WCAG asks of control edges.
         outline: "#6d7980",
         brand: "#106c48",

@@ -4,7 +4,7 @@
 
 @layer base {
   html {
-    background-color: #f6f5f2;
+    background-color: #fbfaf7;
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
     /* Room for the sticky header when jumping to an anchor. */
@@ -18,7 +18,7 @@
   }
 
   body {
-    background-color: #f6f5f2;
+    background-color: #fbfaf7;
     color: #171a21;
     font-family: 'Hanken Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
     font-size: 1rem;
@@ -91,7 +91,7 @@
     position: relative;
     padding: 1px;
     border-radius: 14px;
-    background: #d9d6cf;
+    background: #dedbd3;
     clip-path: var(--cut);
     transition: background-color 0.18s var(--ease-out);
   }
@@ -115,7 +115,7 @@
     }
 
     .lift:hover .card {
-      background: #b5b0a5;
+      background: #bdb8ac;
     }
   }
 
@@ -135,6 +135,32 @@
     text-transform: uppercase;
   }
 
+  /* One fluid frame for header, sections and footer: shared edges and gutters. */
+  .page-frame {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 1680px;
+    padding-inline: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .page-frame {
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .page-frame {
+      padding-inline: 2.5rem;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .page-frame {
+      padding-inline: 3.5rem;
+    }
+  }
+
   .skip-link {
     position: fixed;
     left: 16px;
@@ -143,7 +169,7 @@
     padding: 10px 16px;
     border-radius: 9999px;
     background: #171a21;
-    color: #f6f5f2;
+    color: #fbfaf7;
     font-weight: 700;
   }
 

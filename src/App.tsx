@@ -516,9 +516,9 @@ export default function App() {
     <div className="min-h-dvh flex flex-col">
       <a href="#main" className="skip-link">Spring til indhold</a>
 
-      {/* As Lofty's: paper glass with a blur, a hairline under it, 72px tall. */}
-      <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur-md">
-        <nav aria-label="Hovedmenu" className="mx-auto max-w-6xl px-4 sm:px-6 min-h-[72px] flex flex-wrap items-stretch justify-between gap-x-4">
+      {/* As Lofty's: white glass with a blur, a hairline under it, 72px tall. */}
+      <header className="sticky top-0 z-40 border-b border-line bg-surface/95 backdrop-blur-md">
+        <nav aria-label="Hovedmenu" className="page-frame min-h-[72px] flex flex-wrap items-stretch justify-between gap-x-4">
           <a
             href="/"
             onClick={(e) => {
@@ -570,9 +570,9 @@ export default function App() {
       <main id="main" className="flex-grow">
         <section
           aria-labelledby="title"
-          className={`mx-auto max-w-6xl px-4 sm:px-6 overflow-x-clip ${empty ? 'pt-12 sm:pt-20 pb-16' : 'pt-8 pb-12'}`}
+          className={`page-frame overflow-x-clip ${empty ? 'pt-12 sm:pt-20 pb-16' : 'pt-8 pb-12'}`}
         >
-          <div className={empty ? 'grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] gap-10 lg:gap-16 items-center' : ''}>
+          <div className={empty ? 'grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)] gap-10 lg:gap-16 xl:gap-24 items-center' : ''}>
             <div className={empty ? '' : 'flex flex-wrap items-end justify-between gap-x-8 gap-y-2 mb-6'}>
               <h1
                 id="title"
@@ -610,7 +610,7 @@ export default function App() {
                 {...dropHandlers}
                 onClick={pick}
                 aria-label="Vælg musikfiler, eller slip dem her"
-                className="lift group relative block w-full max-w-[440px] mx-auto lg:mx-0 aspect-square"
+                className="lift group relative block w-full max-w-[440px] lg:max-w-[520px] mx-auto lg:mx-0 aspect-square"
               >
                 {/* The record peeks out of the sleeve, and slides further out on hover. */}
                 <span
@@ -664,7 +664,7 @@ export default function App() {
           {!empty && <div role="alert">{errorBox}</div>}
 
           {!empty && (
-            <div className="mt-6 grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-6 items-start">
+            <div className="mt-6 grid grid-cols-1 lg:grid-cols-[minmax(300px,24%)_minmax(0,1fr)] xl:grid-cols-[minmax(340px,26%)_minmax(0,1fr)] gap-6 xl:gap-8 items-start">
               <aside
                 {...dropHandlers}
                 aria-label="Dine filer"
@@ -841,7 +841,7 @@ export default function App() {
         * print with the signature under a hairline.
         */}
       <footer className="border-t-4 border-brand bg-surface text-sm text-ink-dim">
-        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-8 gap-y-8 px-4 pb-8 pt-12 sm:gap-x-12 sm:px-6 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="page-frame grid grid-cols-2 gap-x-8 gap-y-8 pb-8 pt-12 sm:gap-x-12 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <div className="col-span-2 md:col-span-1">
             <p className="font-display text-xl font-extrabold tracking-[-0.04em] text-brand">Localify</p>
             <p className="mt-3 max-w-[42ch] leading-relaxed">
@@ -870,7 +870,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="page-frame">
           <div className="flex flex-col gap-1 border-t border-line py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
             <p className="text-[0.8125rem]">
               © {new Date().getFullYear()} Localify · Ikke tilknyttet Spotify. Navne og varemærker tilhører deres ejere.

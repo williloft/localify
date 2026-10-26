@@ -5,7 +5,7 @@ import { STORED } from './lib/remember';
 export function Privacy() {
   return (
     <section id="privatliv" aria-labelledby="privacy-title" className="scroll-mt-16 border-t border-line">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-16 sm:py-20 grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
+      <div className="page-frame py-16 sm:py-20 grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
         <div>
           <p className="eyebrow text-ink-dim">Privatliv</p>
           <h2
