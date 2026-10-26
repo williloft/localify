@@ -130,9 +130,9 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {/* Cover and the record's name, the way a sleeve shows them. */}
-      <div className="grid gap-6 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-end">
+      <div className="grid gap-5 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-end">
         <div>
           <button
             type="button"
@@ -148,7 +148,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
               if (f) void setCoverFile(f);
             }}
             onClick={() => coverInputRef.current?.click()}
-            className={`w-36 aspect-square flex items-center justify-center overflow-hidden shadow-print transition-colors ${
+            className={`w-28 aspect-square flex items-center justify-center overflow-hidden shadow-print transition-colors ${
               coverUrl && !coverBroken ? 'bg-ink' : coverDrag ? 'bg-brand-tint' : 'bg-sunken hover:bg-line/60'
             }`}
           >
@@ -162,8 +162,8 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
               <img
                 src={coverUrl}
                 alt=""
-                width={144}
-                height={144}
+                width={112}
+                height={112}
                 onError={() => setBrokenUrl(coverUrl)}
                 className="w-full h-full object-cover"
               />
@@ -192,7 +192,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
               </button>
             )}
           </div>
-          {coverWarning && <p className="mt-1 w-36 text-xs text-ink-dim">{coverWarning}</p>}
+          {coverWarning && <p className="mt-1 w-28 text-xs text-ink-dim">{coverWarning}</p>}
           <input
             ref={coverInputRef}
             type="file"
@@ -227,7 +227,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-x-5 gap-y-5 pt-8 border-t border-line">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-x-5 gap-y-4 pt-5 border-t border-line">
         {FIELDS.map(({ key, label, placeholder, span, numeric }) => {
           const shape = SHAPES[key];
           const odd = !!shape && editable[key].trim() !== '' && !shape.ok.test(editable[key].trim());
@@ -302,7 +302,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
         </div>
       )}
 
-      <div className="rounded-panel bg-sunken p-4 sm:p-5 space-y-4">
+      <div className="rounded-panel bg-sunken p-4 space-y-3">
         <div className={`grid gap-4 ${read.format === 'm4a' ? 'sm:grid-cols-2' : ''}`}>
           {read.format === 'm4a' && (
             <div className="flex flex-col gap-1.5 min-w-0">
@@ -318,7 +318,9 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
                 <option value="m4a">M4A, lyden røres ikke</option>
               </select>
               <p id="output-format-hint" className="text-xs text-ink-dim">
-                MP3 er foreslået, fordi Spotifys lokale filer ikke tager M4A. Vælg M4A, hvis du vil beholde formatet.
+                {converting
+                  ? 'MP3 er foreslået, fordi Spotifys lokale filer ikke tager M4A. Vælg M4A, hvis du vil beholde formatet.'
+                  : 'Filen beholder sit format.'}
               </p>
             </div>
           )}
@@ -356,6 +358,14 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
               og går tabt ved konvertering: <span title={wouldDrop.join(', ')}>{fieldLabels(wouldDrop)}</span>.
             </p>
           </Notice>
+        )}
+
+        {/* Said for every save that keeps the format, MP3 to MP3 included, so nobody wonders whether the sound changes. */}
+        {!converting && (
+          <p className="flex items-start gap-2 text-sm text-ink-dim">
+            <Icon name="shield" className="w-4 h-4 shrink-0 mt-0.5 text-brand" />
+            Lyden kodes ikke om. Kun tagget skrives.
+          </p>
         )}
 
         <p className="text-sm text-ink-dim truncate-fname" title={previewName}>

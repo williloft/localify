@@ -75,12 +75,69 @@ function batchLabel(b: BatchProgress): string {
   return b.packing ? 'Pakker zip-filen…' : `Gemmer ${formatNumber(b.done + 1)} af ${formatNumber(b.total)}…`;
 }
 
+/** What the page says while files are being read. */
+function readingLabel({ done, total }: { done: number; total: number }): string {
+  return total === 1 ? 'Læser filen…' : `Læser ${formatNumber(done + 1)} af ${formatNumber(total)}…`;
+}
+
 /** The line under the button: what the current file is going through. */
 function batchDetail(b: BatchProgress, files: number): string {
   if (b.packing) return 'Lægger filerne sammen i én zip-fil';
   if (b.fileProgress != null) return `Koder om til MP3 · ${Math.round(b.fileProgress * 100)} %`;
   return `${formatNumber(files)} filer i én zip-fil`;
 }
+
+const FOOTER_HEADING = 'mb-1 font-display text-xs font-extrabold uppercase tracking-[0.1em] text-ink';
+const FOOTER_LINK =
+  'self-start py-1 text-ink-dim underline decoration-transparent underline-offset-4 transition-colors hover:text-brand hover:decoration-current';
+
+/** The open-source libraries doing the work, as the README names them. */
+const LIBRARIES: { label: string; use: string; href: string }[] = [
+  { label: 'music-metadata', use: 'læser tags', href: 'https://github.com/Borewit/music-metadata' },
+  { label: 'browser-id3-writer', use: 'skriver ID3', href: 'https://github.com/egoroof/browser-id3-writer' },
+  { label: 'lamejs', use: 'MP3-kodning · LGPL-3.0', href: 'https://github.com/gilesgc/lamejs' },
+  { label: 'fflate', use: 'zip-filer', href: 'https://github.com/101arrowz/fflate' },
+];
+
+/** The header's links. "Sådan virker det" makes room on a phone. */
+const NAV_LINKS: { id: string; label: string; wide?: boolean }[] = [
+  { id: 'om', label: 'Sådan virker det', wide: true },
+  { id: 'sporgsmal', label: 'Spørgsmål' },
+];
+
+/**
+ * The section in view, so the header can mark where you are: the last one
+ * whose top has passed a line a third of the way down the screen.
+ */
+function useActiveSection(ids: string[]): string | null {
+  const [active, setActive] = useState<string | null>(null);
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const line = window.innerHeight / 3;
+      const atEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+      let current: string | null = null;
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el && (el.getBoundingClientRect().top <= line || atEnd)) current = id;
+      }
+      setActive(current);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+    update();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+    };
+  }, [ids]);
+  return active;
+}
+
+const NAV_IDS = NAV_LINKS.map((l) => l.id);
 
 /** Lists in the batch note show this many lines before "+N mere". */
 const NOTE_LINES = 5;
@@ -155,6 +212,9 @@ export default function App() {
   const stopBatch = useRef<AbortController | null>(null);
   const [pattern, setPatternState] = useState<NamePattern>(storedPattern);
   const inputRef = useRef<HTMLInputElement>(null);
+  const activeSection = useActiveSection(NAV_IDS);
+  /** Files being read right now, so the page says so instead of looking idle. */
+  const [reading, setReading] = useState<{ done: number; total: number } | null>(null);
 
   const setPattern = useCallback((next: NamePattern) => {
     setPatternState(next);
@@ -174,7 +234,8 @@ export default function App() {
 
     setBusy(true);
     const loaded: LoadedFile[] = [];
-    for (const file of list) {
+    for (const [i, file] of list.entries()) {
+      setReading({ done: i, total: list.length });
       // Let the page paint between files, so a long batch shows it is working.
       await new Promise((resolve) => setTimeout(resolve, 0));
       try {
@@ -200,6 +261,7 @@ export default function App() {
         setError(problems.join('\n'));
       }
     }
+    setReading(null);
     setBusy(false);
     setFiles((prev) => {
       const seen = new Set(prev.map((p) => p.id));
@@ -410,8 +472,9 @@ export default function App() {
     <div className="min-h-dvh flex flex-col">
       <a href="#main" className="skip-link">Spring til indhold</a>
 
+      {/* As Lofty's: paper glass with a blur, a hairline under it, 72px tall. */}
       <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur-md">
-        <nav aria-label="Hovedmenu" className="mx-auto max-w-6xl px-4 sm:px-6 min-h-16 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <nav aria-label="Hovedmenu" className="mx-auto max-w-6xl px-4 sm:px-6 min-h-[72px] flex flex-wrap items-stretch justify-between gap-x-4">
           <a
             href="/"
             onClick={(e) => {
@@ -420,22 +483,38 @@ export default function App() {
               window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
             }}
             // Keyboard focus shows as an underline under the name instead of a box around it.
-            className="font-display text-xl font-extrabold tracking-[-0.03em] text-brand decoration-2 underline-offset-[6px] focus-visible:outline-none focus-visible:underline"
+            className="self-center inline-flex min-h-11 items-center font-display text-xl font-extrabold tracking-[-0.04em] text-brand decoration-2 underline-offset-[6px] focus-visible:outline-none focus-visible:underline"
           >
             Localify
           </a>
-          <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
-            <a href="#om" className="hidden sm:inline-flex h-10 items-center rounded-full px-3 text-[0.9375rem] font-medium text-ink/85 hover:text-ink hover:bg-sunken transition-colors">
-              Sådan virker det
-            </a>
-            <a href="#sporgsmal" className="inline-flex h-10 items-center whitespace-nowrap rounded-full px-2.5 sm:px-3 text-[0.9375rem] font-medium text-ink/85 hover:text-ink hover:bg-sunken transition-colors">
-              Spørgsmål
-            </a>
+          <div className="flex items-stretch justify-end gap-0 sm:gap-1">
+            {NAV_LINKS.map((link) => {
+              const isActive = activeSection === link.id;
+              return (
+                <a
+                  key={link.id}
+                  href={`#${link.id}`}
+                  aria-current={isActive ? 'location' : undefined}
+                  className={`relative items-center whitespace-nowrap px-2.5 sm:px-3 font-display text-[0.9375rem] font-semibold transition-colors ${
+                    link.wide ? 'hidden sm:inline-flex' : 'inline-flex'
+                  } ${isActive ? 'text-ink' : 'text-ink-dim hover:text-ink'}`}
+                >
+                  {link.label}
+                  {/* Where you are: a green bar on the header's bottom edge. */}
+                  <span
+                    aria-hidden="true"
+                    className={`absolute inset-x-2.5 sm:inset-x-3 -bottom-px h-[3px] rounded-t-[3px] bg-brand transition-transform duration-150 motion-reduce:transition-none ${
+                      isActive ? 'scale-x-100' : 'scale-x-0'
+                    }`}
+                  />
+                </a>
+              );
+            })}
             <button
               type="button"
               onClick={pick}
               disabled={locked}
-              className={buttonClassName('primary', 'sm', 'ml-1 gap-1.5 sm:pl-3')}
+              className={buttonClassName('primary', 'sm', 'self-center ml-1.5 sm:ml-3 gap-1.5 sm:pl-3')}
             >
               <Icon name="add" className="hidden sm:block w-4 h-4" />
               {empty ? 'Vælg filer' : 'Tilføj'}
@@ -447,10 +526,10 @@ export default function App() {
       <main id="main" className="flex-grow">
         <section
           aria-labelledby="title"
-          className={`mx-auto max-w-6xl px-4 sm:px-6 overflow-x-clip ${empty ? 'pt-12 sm:pt-20 pb-16' : 'pt-8 sm:pt-10 pb-12'}`}
+          className={`mx-auto max-w-6xl px-4 sm:px-6 overflow-x-clip ${empty ? 'pt-12 sm:pt-20 pb-16' : 'pt-8 pb-12'}`}
         >
           <div className={empty ? 'grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] gap-10 lg:gap-16 items-center' : ''}>
-            <div className={empty ? '' : 'flex flex-wrap items-end justify-between gap-x-8 gap-y-2 mb-8'}>
+            <div className={empty ? '' : 'flex flex-wrap items-end justify-between gap-x-8 gap-y-2 mb-6'}>
               <h1
                 id="title"
                 className={`font-display font-extrabold text-ink tracking-[-0.04em] hyphens-auto [overflow-wrap:anywhere] ${
@@ -487,7 +566,7 @@ export default function App() {
                 {...dropHandlers}
                 onClick={pick}
                 aria-label="Vælg musikfiler, eller slip dem her"
-                className="group relative block w-full max-w-[440px] mx-auto lg:mx-0 aspect-square"
+                className="lift group relative block w-full max-w-[440px] mx-auto lg:mx-0 aspect-square"
               >
                 {/* The record peeks out of the sleeve, and slides further out on hover. */}
                 <span
@@ -500,8 +579,10 @@ export default function App() {
                   <span className="absolute inset-[34%] rounded-full bg-mint" />
                   <span className="absolute inset-[48.5%] rounded-full bg-ink" />
                 </span>
+                {/* The sleeve: the house card, with its hairline and the cut bottom right. */}
+                <span className="card absolute inset-0 right-[22%] block">
                 <span
-                  className={`cut absolute inset-0 right-[22%] flex flex-col justify-between p-6 sm:p-8 text-left shadow-print transition-colors ${
+                  className={`card__in flex flex-col justify-between p-6 sm:p-8 text-left transition-colors ${
                     dragOver ? 'bg-brand-tint' : 'bg-surface'
                   }`}
                 >
@@ -517,7 +598,7 @@ export default function App() {
                   </span>
                   <span>
                     <span className="block font-display text-2xl sm:text-3xl font-bold tracking-[-0.03em] text-ink">
-                      {busy ? 'Læser filer…' : (
+                      {reading ? readingLabel(reading) : (
                         <>
                           <span className="[@media(pointer:fine)]:hidden">Tryk for at vælge</span>
                           <span className="hidden [@media(pointer:fine)]:inline">Slip filerne her</span>
@@ -527,19 +608,23 @@ export default function App() {
                     <span className="mt-2 block text-ink-dim">MP3 og M4A, gerne flere ad gangen.</span>
                   </span>
                 </span>
+                </span>
               </button>
             )}
           </div>
+
+          {/* One calm announcement while files are read, not one per file. */}
+          <p role="status" className="sr-only">{reading ? 'Læser filer' : ''}</p>
 
           {/* Kept mounted so screen readers announce the message when it appears. */}
           {!empty && <div role="alert">{errorBox}</div>}
 
           {!empty && (
-            <div className="mt-6 grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-6 items-start">
+            <div className="mt-6 grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-6 items-start">
               <aside
                 {...dropHandlers}
                 aria-label="Dine filer"
-                className={`cut p-4 sm:p-5 shadow-print transition-colors ${dragOver ? 'bg-brand-tint' : 'bg-surface'}`}
+                className={`rounded-panel border border-line p-4 sm:p-5 transition-colors ${dragOver ? 'bg-brand-tint' : 'bg-surface'}`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 pb-3 mb-2 border-b border-line">
                   <h2 className="eyebrow text-ink">
@@ -549,9 +634,9 @@ export default function App() {
                     <button
                       onClick={clearAll}
                       disabled={locked}
-                      className="h-9 px-3 rounded-full disabled:opacity-40 disabled:pointer-events-none text-sm text-ink-dim hover:text-danger hover:bg-danger-tint transition-colors"
+                      className="h-9 px-2.5 whitespace-nowrap rounded-full disabled:opacity-40 disabled:pointer-events-none text-sm text-ink-dim hover:text-danger hover:bg-danger-tint transition-colors"
                     >
-                      Ryd
+                      Ryd listen
                     </button>
                     <button
                       onClick={pick}
@@ -584,6 +669,10 @@ export default function App() {
                     />
                   ))}
                 </ol>
+                {/* Files added to a list already there: the list and the open editor stay as they are, and this says what is coming. */}
+                {reading && (
+                  <p aria-hidden="true" className="mt-2 px-2 text-sm text-ink-dim tabular-nums">{readingLabel(reading)}</p>
+                )}
 
                 {files.length > 1 && (
                   <div className="mt-3 pt-4 border-t border-line">
@@ -623,7 +712,8 @@ export default function App() {
                 )}
               </aside>
 
-              <div className="cut min-w-0 bg-surface shadow-print p-5 sm:p-8">
+              <div className="card min-w-0">
+              <div className="card__in bg-surface p-5 sm:p-7">
                 {active && (
                   <TagEditor
                     key={active.id}
@@ -639,6 +729,7 @@ export default function App() {
                     onSave={save}
                   />
                 )}
+              </div>
               </div>
             </div>
           )}
@@ -656,22 +747,45 @@ export default function App() {
         />
       </main>
 
-      {/* Short, like Lofty's: a green accent line, one line about the tool, then © and who made it. */}
-      <footer className="border-t-4 border-brand bg-surface">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 pt-8 text-sm text-ink-dim">
-          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pb-6">
-            <p>
-              <span className="font-display font-bold text-ink">Localify</span> kører kun i din browser.
+      {/*
+        * As Lofty's: a white surface under a 4px green edge, the name in Sora 800
+        * with a line about it, columns under small Sora capitals, and the small
+        * print with the signature under a hairline.
+        */}
+      <footer className="border-t-4 border-brand bg-surface text-sm text-ink-dim">
+        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-8 gap-y-8 px-4 pb-8 pt-12 sm:gap-x-12 sm:px-6 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="col-span-2 md:col-span-1">
+            <p className="font-display text-xl font-extrabold tracking-[-0.04em] text-brand">Localify</p>
+            <p className="mt-3 max-w-[42ch] leading-relaxed">
+              Ret metadata i MP3 og M4A. Det hele sker i din browser, så filerne forlader aldrig din computer.
             </p>
-            <a
-              href="https://github.com/williloft/localify"
-              className="underline underline-offset-4 decoration-line hover:decoration-brand hover:text-brand"
-            >
-              Kildekoden på GitHub
-            </a>
           </div>
-          <div className="flex flex-col gap-1 border-t border-line py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[0.8125rem]">© {new Date().getFullYear()} Localify</p>
+
+          <nav aria-label="Siden" className="flex flex-col gap-1">
+            <h2 className={FOOTER_HEADING}>Siden</h2>
+            <a href="#om" className={FOOTER_LINK}>Sådan virker det</a>
+            <a href="#sporgsmal" className={FOOTER_LINK}>Spørgsmål</a>
+            <a href="https://github.com/williloft/localify" className={FOOTER_LINK}>Kildekoden på GitHub</a>
+          </nav>
+
+          <div className="flex flex-col gap-1">
+            <h2 className={FOOTER_HEADING}>Bygget med</h2>
+            {LIBRARIES.map((lib) => (
+              <div key={lib.label} className="flex flex-col">
+                <a href={lib.href} target="_blank" rel="noopener noreferrer" translate="no" className={FOOTER_LINK}>
+                  {lib.label}
+                </a>
+                <span className="text-xs text-ink-dim">{lib.use}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="flex flex-col gap-1 border-t border-line py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
+            <p className="text-[0.8125rem]">
+              © {new Date().getFullYear()} Localify · Ikke tilknyttet Spotify. Navne og varemærker tilhører deres ejere.
+            </p>
             <a
               href="https://lofty-seven.vercel.app"
               target="_blank"

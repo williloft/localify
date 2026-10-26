@@ -8,7 +8,7 @@
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
     /* Room for the sticky header when jumping to an anchor. */
-    scroll-padding-top: 4.5rem;
+    scroll-padding-top: 88px;
   }
 
   @media (prefers-reduced-motion: no-preference) {
@@ -57,10 +57,73 @@
   }
 }
 
+/*
+ * The house card, as the Pokédex's: one cut corner, bottom right, softened
+ * where the browser can draw it; a 1px hairline instead of a resting shadow.
+ * The hairline is an outer layer (.card) showing round an inner one
+ * (.card__in), so it follows the diagonal too.
+ */
+:root {
+  --cut-size: 28px;
+  --cut-round: 6px;
+  --cut: polygon(0 0, 100% 0, 100% calc(100% - var(--cut-size)), calc(100% - var(--cut-size)) 100%, 0 100%);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@supports (clip-path: shape(from 0 0, line to 100% 0, line to 0 100%, close)) {
+  :root {
+    --cut: shape(
+      from 0 0,
+      line to 100% 0,
+      line to 100% calc(100% - var(--cut-size) - var(--cut-round)),
+      curve to calc(100% - var(--cut-round) * 0.7071) calc(100% - var(--cut-size) + var(--cut-round) * 0.7071)
+        with 100% calc(100% - var(--cut-size)),
+      line to calc(100% - var(--cut-size) + var(--cut-round) * 0.7071) calc(100% - var(--cut-round) * 0.7071),
+      curve to calc(100% - var(--cut-size) - var(--cut-round)) 100% with calc(100% - var(--cut-size)) 100%,
+      line to 0 100%,
+      close
+    );
+  }
+}
+
 @layer components {
-  /* The one cut corner, top right, shared by every panel. */
-  .cut {
-    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+  .card {
+    position: relative;
+    padding: 1px;
+    border-radius: 14px;
+    background: #d9d6cf;
+    clip-path: var(--cut);
+    transition: background-color 0.18s var(--ease-out);
+  }
+
+  /* The inner cut as big as the outer one: the edge comes out a little thicker across the diagonal, so it reads as strong as the straight ones. */
+  .card__in {
+    position: relative;
+    height: 100%;
+    border-radius: 13px;
+    clip-path: var(--cut);
+  }
+
+  /* Only what can be clicked lifts, and only under a mouse. */
+  .lift {
+    transition: transform 0.18s var(--ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .lift:hover {
+      transform: translateY(-3px);
+    }
+
+    .lift:hover .card {
+      background: #b5b0a5;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lift,
+    .card {
+      transition: none;
+    }
   }
 
   /* Small printed labels: "Side A", "Liner notes", field names. */
