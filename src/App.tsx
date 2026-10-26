@@ -1,22 +1,19 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import {
-  readFileTags,
-  ReadError,
-  saveFile,
-  acceptsFile,
-  type AudioFormat,
-  type EditableTags,
-  type FileTags,
-  type CoverArt,
-} from './lib/tags';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { readFileTags, ReadError, acceptsFile } from './lib/tags';
 import { openBatchZip } from './lib/batchZip';
-import { buildFilename, sanitizeSegment, type NamePattern } from './lib/filename';
+import { type NamePattern } from './lib/filename';
 import { DecodeError } from './lib/transcode';
-import { fieldLabels, formatNumber, plural, skippedMessage } from './lib/fieldLabels';
+import { formatNumber, plural, skippedMessage } from './lib/fieldLabels';
+import { download, renderFile, uniqueName, zipName } from './lib/export';
+import type { LoadedFile } from './lib/loaded';
 import { TagEditor } from './TagEditor';
 import { SharedPanel } from './SharedPanel';
-import { ChangeList } from './Changes';
-import { cachedChangesOf, hasMetadataChanges, summarize, type FileChanges } from './lib/changes';
+import { SiteHeader } from './SiteHeader';
+import { SiteFooter } from './SiteFooter';
+import { MarkAll, TrackRow } from './TrackList';
+import { BatchNoteView, BatchOverview } from './BatchPanel';
+import { announced, batchDetail, batchLabel, type BatchNote, type BatchProgress } from './lib/batchStatus';
+import { cachedChangesOf } from './lib/changes';
 import { applyShared, sharedFieldList, undoShared, type SharedEdit, type SharedField } from './lib/shared';
 import { About } from './About';
 import { Icon } from './Icon';
@@ -28,164 +25,9 @@ import { rememberedPattern, writePattern } from './lib/remember';
 // Worst-case data switch for break-ui. Dev builds only; production drops the import.
 const DataToggle = import.meta.env.DEV ? lazy(() => import('./dev/DataToggle')) : null;
 
-export interface LoadedFile {
-  id: string;
-  file: File;
-  read: FileTags;
-  editable: EditableTags;
-  cover: CoverArt | null;
-  dirty: boolean;
-  saved: boolean;
-  /** What the download should be. MP3 by default, including for M4A sources. */
-  outputFormat: AudioFormat;
-}
-
-/** Read a File into an ArrayBuffer without keeping it alive any longer than needed. */
-async function bufferOf(file: File): Promise<ArrayBuffer> {
-  return await file.arrayBuffer();
-}
-
-/** What "Download alle som ZIP" reports when it is done: what was left out, and what went in with a warning. */
-interface BatchNote {
-  stopped?: boolean;
-  /** A whole-batch failure, such as a zip too large for the browser. */
-  failed?: string;
-  skipped: string[];
-  warnings: string[];
-}
-
-/** Where "Download alle som ZIP" is: which file, how far a conversion has come, or finishing the zip. */
-interface BatchProgress {
-  done: number;
-  total: number;
-  /** 0–1 while the current file is converted to MP3, null otherwise. */
-  fileProgress?: number | null;
-  /** Every file is in; the archive is being finished. */
-  packing?: boolean;
-}
-
-/** The button's text while a batch runs. Short, so it fits the 300px list on every screen. */
-function batchLabel(b: BatchProgress): string {
-  return b.packing ? 'Pakker zip-filen…' : `Gemmer ${formatNumber(b.done + 1)} af ${formatNumber(b.total)}…`;
-}
-
 /** What the page says while files are being read. */
 function readingLabel({ done, total }: { done: number; total: number }): string {
   return total === 1 ? 'Læser filen…' : `Læser ${formatNumber(done + 1)} af ${formatNumber(total)}…`;
-}
-
-/** The line under the button: what the current file is going through. */
-function batchDetail(b: BatchProgress, files: number): string {
-  if (b.packing) return 'Lægger filerne sammen i én zip-fil';
-  if (b.fileProgress != null) return `Koder om til MP3 · ${Math.round(b.fileProgress * 100)} %`;
-  return `${formatNumber(files)} filer i én zip-fil`;
-}
-
-const FOOTER_HEADING = 'mb-1 font-display text-xs font-extrabold uppercase tracking-[0.1em] text-ink';
-const FOOTER_LINK =
-  'self-start py-1 text-ink-dim underline decoration-transparent underline-offset-4 transition-colors hover:text-brand hover:decoration-current';
-
-/** The open-source libraries doing the work, as the README names them. */
-const LIBRARIES: { label: string; use: string; href: string }[] = [
-  { label: 'music-metadata', use: 'læser tags', href: 'https://github.com/Borewit/music-metadata' },
-  { label: 'browser-id3-writer', use: 'skriver ID3', href: 'https://github.com/egoroof/browser-id3-writer' },
-  { label: 'lamejs', use: 'MP3-kodning · LGPL-3.0', href: 'https://github.com/gilesgc/lamejs' },
-  { label: 'fflate', use: 'zip-filer', href: 'https://github.com/101arrowz/fflate' },
-];
-
-/** The header's links. "Sådan virker det" makes room on a phone. */
-const NAV_LINKS: { id: string; label: string; wide?: boolean }[] = [
-  { id: 'om', label: 'Sådan virker det', wide: true },
-  { id: 'sporgsmal', label: 'Spørgsmål' },
-];
-
-/**
- * The section in view, so the header can mark where you are: the last one
- * whose top has passed a line a third of the way down the screen.
- */
-function useActiveSection(ids: string[]): string | null {
-  const [active, setActive] = useState<string | null>(null);
-  useEffect(() => {
-    let frame = 0;
-    const update = () => {
-      frame = 0;
-      const line = window.innerHeight / 3;
-      const atEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
-      let current: string | null = null;
-      for (const id of ids) {
-        const el = document.getElementById(id);
-        if (el && (el.getBoundingClientRect().top <= line || atEnd)) current = id;
-      }
-      setActive(current);
-    };
-    const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
-    update();
-    window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
-    };
-  }, [ids]);
-  return active;
-}
-
-const NAV_IDS = NAV_LINKS.map((l) => l.id);
-
-/** Lists in the batch note show this many lines before "+N mere". */
-const NOTE_LINES = 5;
-
-/** Write one file's tags and work out its download name, without downloading it. */
-async function renderFile(
-  f: LoadedFile,
-  pattern: NamePattern,
-  onProgress?: (p: number) => void,
-  signal?: AbortSignal
-): Promise<{ blob: Blob; name: string; notes: string[] }> {
-  const { blob, failed, reencoded, dropped, extension } = await saveFile({
-    buffer: await bufferOf(f.file),
-    format: f.read.format,
-    editable: f.editable,
-    cover: f.cover,
-    carried: f.read.carried,
-    outputFormat: f.outputFormat,
-    onProgress,
-    signal,
-  });
-  const notes: string[] = [];
-  if (failed.length) notes.push(`Kunne ikke skrive: ${fieldLabels(failed)}`);
-  if (reencoded && dropped.length) notes.push(`Felter uden MP3-modstykke gik tabt: ${fieldLabels(dropped)}`);
-  const name = buildFilename({ pattern, tags: f.editable, originalName: f.file.name, extension });
-  return { blob, name, notes };
-}
-
-function download(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
-
-/** "Song.mp3", then "Song (2).mp3": two tracks with the same title must not overwrite each other in the zip. */
-function uniqueName(name: string, used: Set<string>): string {
-  const dot = name.lastIndexOf('.');
-  const stem = dot > 0 ? name.slice(0, dot) : name;
-  const ext = dot > 0 ? name.slice(dot) : '';
-  let candidate = name;
-  for (let n = 2; used.has(candidate.toLowerCase()); n++) candidate = `${stem} (${n})${ext}`;
-  used.add(candidate.toLowerCase());
-  return candidate;
-}
-
-/** Named after the album when every file shares one, which is the usual case. */
-function zipName(files: LoadedFile[]): string {
-  const albums = new Set(files.map((f) => f.editable.album.trim()).filter(Boolean));
-  // Same cap as single files: room for the extension inside the 255-byte name limit.
-  const album = albums.size === 1 ? sanitizeSegment([...albums][0]).slice(0, 180).trimEnd() : '';
-  return `${album || 'Localify'}.zip`;
 }
 
 export default function App() {
@@ -208,7 +50,6 @@ export default function App() {
   /** Opt-in: the pattern is kept on this device only while this is on. */
   const [remember, setRemember] = useState(() => rememberedPattern() !== null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const activeSection = useActiveSection(NAV_IDS);
   /** Files marked for a shared edit. Separate from the file open in the editor. */
   const [marked, setMarked] = useState<ReadonlySet<string>>(() => new Set());
   /** The last shared edit, kept so it can be undone, and what to say about it. */
@@ -248,7 +89,7 @@ export default function App() {
       try {
         // Buffer is scoped to this iteration so a large batch doesn't pin
         // every file's bytes in memory at once.
-        const buf = await bufferOf(file);
+        const buf = await file.arrayBuffer();
         const read = await readFileTags(buf);
         loaded.push({
           id: `${file.name}-${file.size}-${file.lastModified}`,
@@ -516,56 +357,7 @@ export default function App() {
     <div className="min-h-dvh flex flex-col">
       <a href="#main" className="skip-link">Spring til indhold</a>
 
-      {/* As Lofty's: white glass with a blur, a hairline under it, 72px tall. */}
-      <header className="sticky top-0 z-40 border-b border-line bg-surface/95 backdrop-blur-md">
-        <nav aria-label="Hovedmenu" className="page-frame min-h-[72px] flex flex-wrap items-stretch justify-between gap-x-4">
-          <a
-            href="/"
-            onClick={(e) => {
-              // Already here: go to the top instead of reloading, which would drop the loaded files.
-              e.preventDefault();
-              window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-            }}
-            // Keyboard focus shows as an underline under the name instead of a box around it.
-            className="self-center inline-flex min-h-11 items-center font-display text-xl font-extrabold tracking-[-0.04em] text-brand decoration-2 underline-offset-[6px] focus-visible:outline-none focus-visible:underline"
-          >
-            Localify
-          </a>
-          <div className="flex items-stretch justify-end gap-0 sm:gap-1">
-            {NAV_LINKS.map((link) => {
-              const isActive = activeSection === link.id;
-              return (
-                <a
-                  key={link.id}
-                  href={`#${link.id}`}
-                  aria-current={isActive ? 'location' : undefined}
-                  className={`relative items-center whitespace-nowrap px-2.5 sm:px-3 font-display text-[0.9375rem] font-semibold transition-colors ${
-                    link.wide ? 'hidden sm:inline-flex' : 'inline-flex'
-                  } ${isActive ? 'text-ink' : 'text-ink-dim hover:text-ink'}`}
-                >
-                  {link.label}
-                  {/* Where you are: a green bar on the header's bottom edge. */}
-                  <span
-                    aria-hidden="true"
-                    className={`absolute inset-x-2.5 sm:inset-x-3 -bottom-px h-[3px] rounded-t-[3px] bg-brand transition-transform duration-150 motion-reduce:transition-none ${
-                      isActive ? 'scale-x-100' : 'scale-x-0'
-                    }`}
-                  />
-                </a>
-              );
-            })}
-            <button
-              type="button"
-              onClick={pick}
-              disabled={locked}
-              className={buttonClassName('primary', 'sm', 'self-center ml-1.5 sm:ml-3 gap-1.5 sm:pl-3')}
-            >
-              <Icon name="add" className="hidden sm:block w-4 h-4" />
-              {empty ? 'Vælg filer' : 'Tilføj'}
-            </button>
-          </div>
-        </nav>
-      </header>
+      <SiteHeader empty={empty} locked={locked} onPick={pick} />
 
       <main id="main" className="flex-grow">
         <section
@@ -835,253 +627,13 @@ export default function App() {
         />
       </main>
 
-      {/*
-        * As Lofty's: a white surface under a 4px green edge, the name in Sora 800
-        * with a line about it, columns under small Sora capitals, and the small
-        * print with the signature under a hairline.
-        */}
-      <footer className="border-t-4 border-brand bg-surface text-sm text-ink-dim">
-        <div className="page-frame grid grid-cols-2 gap-x-8 gap-y-8 pb-8 pt-12 sm:gap-x-12 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="col-span-2 md:col-span-1">
-            <p className="font-display text-xl font-extrabold tracking-[-0.04em] text-brand">Localify</p>
-            <p className="mt-3 max-w-[42ch] leading-relaxed">
-              Ret metadata i MP3 og M4A. Det hele sker i din browser, så filerne forlader aldrig din computer.
-            </p>
-          </div>
-
-          <nav aria-label="Siden" className="flex flex-col gap-1">
-            <h2 className={FOOTER_HEADING}>Siden</h2>
-            <a href="#om" className={FOOTER_LINK}>Sådan virker det</a>
-            <a href="#sporgsmal" className={FOOTER_LINK}>Spørgsmål</a>
-            <a href="#privatliv" className={FOOTER_LINK}>Privatliv</a>
-            <a href="https://github.com/williloft/localify" className={FOOTER_LINK}>Kildekoden på GitHub</a>
-          </nav>
-
-          <div className="flex flex-col gap-1">
-            <h2 className={FOOTER_HEADING}>Bygget med</h2>
-            {LIBRARIES.map((lib) => (
-              <div key={lib.label} className="flex flex-col">
-                <a href={lib.href} target="_blank" rel="noopener noreferrer" translate="no" className={FOOTER_LINK}>
-                  {lib.label}
-                </a>
-                <span className="text-xs text-ink-dim">{lib.use}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="page-frame">
-          <div className="flex flex-col gap-1 border-t border-line py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
-            <p className="text-[0.8125rem]">
-              © {new Date().getFullYear()} Localify · Ikke tilknyttet Spotify. Navne og varemærker tilhører deres ejere.
-            </p>
-            <a
-              href="https://lofty-seven.vercel.app"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Lavet af William Loft Andersen (åbner i ny fane)"
-              className="group inline-flex min-h-11 items-center gap-1 self-start whitespace-nowrap text-[0.8125rem] sm:self-auto"
-            >
-              <span>Lavet af</span>
-              <span className="font-display text-sm font-bold tracking-[-0.02em] text-ink transition-colors duration-150 [@media(hover:hover)]:group-hover:text-brand">
-                Lofty
-              </span>
-              <Icon
-                name="arrow_up_right"
-                className="w-3.5 h-3.5 text-brand transition-transform duration-150 [@media(hover:hover)]:group-hover:translate-x-0.5 [@media(hover:hover)]:group-hover:-translate-y-0.5 motion-reduce:transition-none"
-              />
-            </a>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
 
       {DataToggle && (
         <Suspense fallback={null}>
           <DataToggle onLoad={loadFixture} />
         </Suspense>
       )}
-    </div>
-  );
-}
-
-interface TrackRowProps {
-  file: LoadedFile;
-  index: number;
-  active: boolean;
-  onSelect: (id: string) => void;
-  onRemove: (id: string) => void;
-  /** True while "Download alle som ZIP" runs: the row can be viewed but not removed. */
-  locked: boolean;
-  /** Shows the checkbox for shared edits; only worth it with more than one file. */
-  markable: boolean;
-  marked: boolean;
-  onMark: (id: string) => void;
-}
-
-/** One line of the track list. Memoized: typing in the editor only re-renders the active row. */
-const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSelect, onRemove, locked, markable, marked, onMark }: TrackRowProps) {
-  const name = f.editable.title || f.file.name;
-  return (
-    <li className="group relative flex items-center">
-      {/* Marking is its own control: it never changes which file the editor shows. */}
-      {markable && (
-        <label className="flex h-11 w-8 shrink-0 cursor-pointer items-center justify-center">
-          <input
-            type="checkbox"
-            checked={marked}
-            onChange={() => onMark(f.id)}
-            aria-label={`Markér ${name}`}
-            className="h-4 w-4 accent-brand"
-          />
-        </label>
-      )}
-      <button
-        onClick={() => onSelect(f.id)}
-        title={f.file.name}
-        aria-current={active ? 'true' : undefined}
-        className={`min-w-0 flex-1 text-left pl-2 pr-10 py-2.5 rounded-field transition-colors grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 ${
-          active ? 'bg-brand-tint' : 'hover:bg-sunken'
-        }`}
-      >
-        <span
-          className={`font-display text-sm tabular-nums ${active ? 'text-brand font-semibold' : 'text-ink-dim'}`}
-        >
-          {String(i + 1).padStart(2, '0')}
-        </span>
-        <span className="min-w-0">
-          <span className="flex items-center gap-1.5">
-            <span dir="auto" className="truncate-fname font-medium text-ink">
-              {f.editable.title || f.file.name}
-            </span>
-            {(f.saved || f.dirty) && (
-              <Icon
-                name={f.saved ? 'check_circle' : 'edit'}
-                label={f.saved ? 'Gemt' : 'Ugemte ændringer'}
-                className={`w-3.5 h-3.5 ${f.saved ? 'text-brand' : 'text-ink-dim'}`}
-              />
-            )}
-          </span>
-          {f.editable.title && (
-            <span className="block text-xs text-ink-dim truncate-fname">{f.file.name}</span>
-          )}
-        </span>
-      </button>
-      <button
-        onClick={() => onRemove(f.id)}
-        disabled={locked}
-        aria-label={`Fjern ${f.editable.title || f.file.name} fra listen`}
-        title="Fjern fra listen"
-        className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full text-ink-dim hover:bg-surface hover:text-danger transition-[color,background-color,opacity] [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
-      >
-        <Icon name="close" className="w-4 h-4" />
-      </button>
-    </li>
-      );
-});
-
-/**
- * The zip at a glance: how many files change metadata, convert or lose fields,
- * and, folded away, the details per file. The editor's own warnings stay where
- * they are; this only adds the overview.
- */
-function BatchOverview({ items }: { items: { file: LoadedFile; changes: FileChanges }[] }) {
-  const [open, setOpen] = useState(false);
-  const totals = summarize(items.map((i) => i.changes));
-  const shown = items.filter(({ changes: c }) => hasMetadataChanges(c) || c.format || c.lost.length);
-  const parts = [
-    { text: totals.metadata ? `${plural(totals.metadata, 'fil', 'filer')} med ændret metadata` : 'Ingen ændret metadata', danger: false },
-    { text: totals.converting ? `${formatNumber(totals.converting)} konverteres til MP3` : '', danger: false },
-    // Red, as the editor's own "går tabt" notices.
-    { text: totals.losing ? `${formatNumber(totals.losing)} mister felter` : '', danger: true },
-  ].filter((p) => p.text);
-  return (
-    <div className="mt-2 text-xs">
-      <p className="text-center text-ink-dim">
-        {parts.map((p, i) => (
-          <span key={p.text}>
-            {i > 0 && ' · '}
-            <span className={p.danger ? 'text-danger' : undefined}>{p.text}</span>
-          </span>
-        ))}
-      </p>
-      {shown.length > 0 && (
-        <details className="mt-2 rounded-field border border-line" onToggle={(e) => setOpen(e.currentTarget.open)}>
-          <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 text-sm font-medium text-ink [&::-webkit-details-marker]:hidden">
-            Se ændringer pr. fil
-            <Icon name="add" className={`h-4 w-4 text-brand transition-transform motion-reduce:transition-none ${open ? 'rotate-45' : ''}`} />
-          </summary>
-          {/* Rendered only while open: a thousand files should not cost anything folded away. */}
-          {open && (
-            <ol className="max-h-80 overflow-y-auto border-t border-line px-3">
-              {shown.map(({ file, changes }) => (
-                <li key={file.id} className="border-b border-line py-3 last:border-b-0">
-                  <p className="mb-1.5 truncate-fname text-sm font-semibold text-ink" title={changes.name.to}>{changes.name.to}</p>
-                  <ChangeList changes={changes} showName={false} />
-                </li>
-              ))}
-            </ol>
-          )}
-        </details>
-      )}
-    </div>
-  );
-}
-
-/** "Markér alle", checked when all are, half-checked when some are. */
-function MarkAll({ count, total, onChange }: { count: number; total: number; onChange: (all: boolean) => void }) {
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (ref.current) ref.current.indeterminate = count > 0 && count < total;
-  }, [count, total]);
-  return (
-    <div className="flex items-center justify-between gap-2 -mx-1 px-1 mb-1">
-      <label className="flex h-11 cursor-pointer items-center text-sm text-ink-dim hover:text-ink">
-        <span className="flex w-8 justify-center">
-          <input ref={ref} type="checkbox" checked={count === total} onChange={() => onChange(count !== total)} className="h-4 w-4 accent-brand" />
-        </span>
-        <span className="pl-2">{count === total ? 'Fravælg alle' : 'Markér alle'}</span>
-      </label>
-      {count > 0 && <span className="text-xs text-ink-dim tabular-nums">{formatNumber(count)} markeret</span>}
-    </div>
-  );
-}
-
-/** The progress figure to announce: every file for short batches, every tenth of the way for long ones. */
-function announced({ done, total }: { done: number; total: number }): number {
-  const step = Math.max(1, Math.ceil(total / 10));
-  return Math.max(1, Math.floor((done + 1) / step) * step);
-}
-
-function NoteList({ title, lines }: { title: string; lines: string[] }) {
-  const more = lines.length - NOTE_LINES;
-  return (
-    <div>
-      <p className="font-semibold">{title}</p>
-      <ul className="mt-1 space-y-1 list-disc pl-5">
-        {lines.slice(0, NOTE_LINES).map((l) => <li key={l}>{l}</li>)}
-        {more > 0 && <li className="list-none -ml-5">og {plural(more, 'fil mere', 'filer mere')}.</li>}
-      </ul>
-    </div>
-  );
-}
-
-function BatchNoteView({ note }: { note: BatchNote }) {
-  if (note.stopped) {
-    return <div className="mt-3"><Notice icon="close"><p>Stoppet. Der blev ikke gemt noget.</p></Notice></div>;
-  }
-  return (
-    <div className="mt-3">
-      <Notice tone="danger" icon="warning">
-        <div className="space-y-3 break-words">
-          {note.failed && <p>{note.failed}</p>}
-          {note.skipped.length > 0 && (
-            <NoteList title={`${plural(note.skipped.length, 'fil kom', 'filer kom')} ikke med:`} lines={note.skipped} />
-          )}
-          {note.warnings.length > 0 && (
-            <NoteList title={`${plural(note.warnings.length, 'fil er gemt', 'filer er gemt')} med en advarsel:`} lines={note.warnings} />
-          )}
-        </div>
-      </Notice>
     </div>
   );
 }

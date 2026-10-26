@@ -7,7 +7,7 @@
  *
  * Pick one with ?data=demo | worst | empty | one | many.
  */
-import type { LoadedFile } from '../App';
+import type { LoadedFile } from '../lib/loaded';
 import type { CoverArt, EditableTags, FileTags } from '../lib/tags';
 import { skippedMessage } from '../lib/fieldLabels';
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { LoadedFile } from './App';
+import type { LoadedFile } from './lib/loaded';
 import type { AudioFormat, CoverArt, EditableTags } from './lib/tags';
 import { mapM4aToId3 } from './lib/tags';
 import { PATTERNS, type NamePattern } from './lib/filename';
@@ -29,7 +29,6 @@ interface Props {
   onSave: () => void;
 }
 
-/** Laid out like credits: the long fields wide, the numbers narrow. */
 /**
  * Gentle checks for the two fields with a usual shape. They only add a hint:
  * people write "1998-04" or "3/12" on purpose, so the value is saved as typed.
@@ -45,6 +44,7 @@ const BIG_COVER = 2 * 1024 * 1024;
 /** Covers up to this size are turned into a data URL right away; larger ones in the background. */
 const SYNC_COVER = 512 * 1024;
 
+/** Laid out like credits: the long fields wide, the numbers narrow. */
 const FIELDS: { key: keyof EditableTags; label: string; placeholder: string; span: string; numeric?: boolean }[] = [
   { key: 'title', label: 'Titel', placeholder: 'fx Blæsten går frisk', span: 'md:col-span-4' },
   { key: 'track', label: 'Spornummer', placeholder: 'fx 3/12', span: 'md:col-span-2', numeric: true },

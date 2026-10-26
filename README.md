@@ -115,8 +115,15 @@ Blob, før browseren kan gemme den. Der findes ingen bred browserunderstøttelse
 for at streame en download direkte til disken, så meget store batches kan
 stadig være for meget for en telefon. Gem dem i så fald i mindre bidder.
 
+## Kodestruktur
+
+- `src/App.tsx` — tilstand og flow: indlæsning, redigering, enkeltvis og samlet eksport
+- `src/TagEditor.tsx`, `SharedPanel.tsx`, `TrackList.tsx`, `BatchPanel.tsx` — editor, fælles rettelser, filliste og zip-oversigt
+- `src/SiteHeader.tsx`, `SiteFooter.tsx`, `About.tsx`, `Privacy.tsx` — siden omkring
+- `src/lib/` — rene funktioner og filformater uden React; `export.ts` skriver og navngiver downloads, `loaded.ts` er typen for en indlæst fil
+
 ## Status
 
-v1. Understøtter MP3 og M4A, med konvertering til MP3. Næste skridt:
-batch-redigering på tværs af filer, ZIP-download, MusicBrainz-opslag, File
-System Access API så filer kan redigeres på stedet.
+v1. Understøtter MP3 og M4A, med konvertering til MP3, fælles rettelser på tværs
+af filer og ZIP-download. Næste skridt: MusicBrainz-opslag og File System Access
+API så filer kan redigeres på stedet.

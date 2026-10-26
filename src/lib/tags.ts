@@ -223,11 +223,6 @@ export function mapM4aToId3(items: IlstItem[]): CrossFormatMapping {
   return { frames, dropped };
 }
 
-/** What a given source can be saved as. */
-export function outputOptionsFor(format: AudioFormat): AudioFormat[] {
-  return format === 'mp3' ? ['mp3'] : ['mp3', 'm4a'];
-}
-
 export interface ConvertInput extends WriteInput {
   outputFormat: AudioFormat;
   bitrateKbps?: number;

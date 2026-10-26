@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { LoadedFile } from './App';
+import type { LoadedFile } from './lib/loaded';
 import { canShare, SHARED_FIELDS, SHARED_LABELS as LABELS, sharedFieldList, type SharedField } from './lib/shared';
 import { formatBytes, formatNumber, plural } from './lib/fieldLabels';
 import { buttonClassName } from './ui';
