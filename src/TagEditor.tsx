@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LoadedFile } from './App';
 import type { AudioFormat, CoverArt, EditableTags } from './lib/tags';
 import { mapM4aToId3 } from './lib/tags';
-import { buildFilename, PATTERNS, type NamePattern } from './lib/filename';
+import { PATTERNS, type NamePattern } from './lib/filename';
+import { changesOf } from './lib/changes';
+import { ChangeList } from './Changes';
 import { fieldLabelList, fieldLabels, formatBytes, formatDuration, plural } from './lib/fieldLabels';
 import { Icon } from './Icon';
 import { Notice } from './Notice';
@@ -103,15 +105,8 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
 
   const converting = read.format === 'm4a' && loaded.outputFormat === 'mp3';
 
-  const previewName = useMemo(
-    () => buildFilename({
-      pattern,
-      tags: editable,
-      originalName: file.name,
-      extension: loaded.outputFormat === 'mp3' ? '.mp3' : '.m4a',
-    }),
-    [pattern, editable, file.name, loaded.outputFormat]
-  );
+  // Before → after against the original file, following every edit, the format and the name pattern.
+  const changes = useMemo(() => changesOf(loaded, pattern), [loaded, pattern]);
 
   // What a conversion would cost, worked out before the user commits to it.
   const wouldDrop = useMemo(() => {
@@ -368,9 +363,11 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
           </p>
         )}
 
-        <p className="text-sm text-ink-dim truncate-fname" title={previewName}>
-          Gemmes som <strong className="font-semibold text-ink">{previewName}</strong>
-        </p>
+        {/* What this save changes, against the original file. Nothing is written to show it. */}
+        <div className="border-t border-line/80 pt-3">
+          <p className="eyebrow text-ink-dim mb-2">Ændringer</p>
+          <ChangeList changes={changes} covers={{ before: read.cover, after: cover }} />
+        </div>
       </div>
 
       <div className="space-y-3">
