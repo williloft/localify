@@ -14,6 +14,8 @@ import { buildFilename, sanitizeSegment, type NamePattern } from './lib/filename
 import { DecodeError } from './lib/transcode';
 import { fieldLabels, formatNumber, plural, skippedMessage } from './lib/fieldLabels';
 import { TagEditor } from './TagEditor';
+import { SharedPanel } from './SharedPanel';
+import { applyShared, sharedFieldList, undoShared, type SharedEdit, type SharedField } from './lib/shared';
 import { About } from './About';
 import { Icon } from './Icon';
 import { buttonClassName } from './ui';
@@ -213,6 +215,10 @@ export default function App() {
   const [pattern, setPatternState] = useState<NamePattern>(storedPattern);
   const inputRef = useRef<HTMLInputElement>(null);
   const activeSection = useActiveSection(NAV_IDS);
+  /** Files marked for a shared edit. Separate from the file open in the editor. */
+  const [marked, setMarked] = useState<ReadonlySet<string>>(() => new Set());
+  /** The last shared edit, kept so it can be undone, and what to say about it. */
+  const [shared, setShared] = useState<{ edit: SharedEdit | null; message: string } | null>(null);
   /** Files being read right now, so the page says so instead of looking idle. */
   const [reading, setReading] = useState<{ done: number; total: number } | null>(null);
 
@@ -305,6 +311,7 @@ export default function App() {
     const idx = current.findIndex((f) => f.id === id);
     const next = current.filter((f) => f.id !== id);
     setFiles(next);
+    setMarked((m) => { if (!m.has(id)) return m; const n = new Set(m); n.delete(id); return n; });
     if (id === currentActive) {
       // Prefer the row that slid into this slot, else the one above it.
       const fallback = next[idx] ?? next[idx - 1] ?? null;
@@ -331,10 +338,44 @@ export default function App() {
     if (files.some((f) => f.dirty) && !confirm('Der er ugemte ændringer. Ryd listen alligevel?')) return;
     setFiles([]);
     setActiveId(null);
+    setMarked(new Set());
+    setShared(null);
     setError('');
     setSaveNote('');
     setBatchNote(null);
   }, [files]);
+
+  const toggleMarked = useCallback((id: string) => {
+    setMarked((m) => { const n = new Set(m); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }, []);
+
+  /** Copy the chosen fields from the open file to the marked ones. In memory only, marked unsaved. */
+  const applySharedFields = useCallback((fields: SharedField[]) => {
+    const { files: current, activeId: sourceId, batching } = latest.current;
+    const source = current.find((f) => f.id === sourceId);
+    if (!source || batching) return;
+    const { files: next, edit } = applyShared(current, source, marked, fields);
+    if (!edit) return;
+    setFiles(next);
+    setShared({
+      edit,
+      message: `${sharedFieldList(edit.fields)} er sat på ${plural(edit.targets.length, 'fil', 'filer')} fra nummer ${String(current.indexOf(source) + 1).padStart(2, '0')}. Ændringerne er ikke gemt endnu.`,
+    });
+  }, [marked]);
+
+  const undoSharedEdit = useCallback(() => {
+    if (!shared?.edit || latest.current.batching) return;
+    const { files: next, kept } = undoShared(latest.current.files, shared.edit);
+    setFiles(next);
+    setShared({
+      edit: null,
+      message: kept.length === 0
+        ? 'Fortrudt. Filerne har deres egne værdier igen.'
+        : `Fortrudt, undtagen det, du har rettet siden: ${kept
+            .map((k) => `${sharedFieldList([k.field]).toLowerCase()} i nummer ${String(next.findIndex((f) => f.id === k.id) + 1).padStart(2, '0')}`)
+            .join(', ')}. Det er ikke ændret.`,
+    });
+  }, [shared]);
 
   const save = useCallback(async () => {
     if (!active) return;
@@ -445,6 +486,8 @@ export default function App() {
   const loadFixture = useCallback((f: { files: LoadedFile[]; error?: string; saveNote?: string }) => {
     setFiles(f.files);
     setActiveId(f.files[0]?.id ?? null);
+    setMarked(new Set());
+    setShared(null);
     setError(f.error ?? '');
     setSaveNote(f.saveNote ?? '');
   }, []);
@@ -649,6 +692,13 @@ export default function App() {
                     </button>
                   </div>
                 </div>
+                {files.length > 1 && (
+                  <MarkAll
+                    count={files.filter((f) => marked.has(f.id)).length}
+                    total={files.length}
+                    onChange={(all) => setMarked(all ? new Set(files.map((f) => f.id)) : new Set())}
+                  />
+                )}
                 {/* The fade says "there is more below" until the list is scrolled to its end. */}
                 <ol
                   ref={listRef}
@@ -666,6 +716,9 @@ export default function App() {
                       onSelect={selectFile}
                       onRemove={removeFile}
                       locked={locked}
+                      markable={files.length > 1}
+                      marked={marked.has(f.id)}
+                      onMark={toggleMarked}
                     />
                   ))}
                 </ol>
@@ -673,6 +726,36 @@ export default function App() {
                 {reading && (
                   <p aria-hidden="true" className="mt-2 px-2 text-sm text-ink-dim tabular-nums">{readingLabel(reading)}</p>
                 )}
+
+                {active && files.some((f) => marked.has(f.id)) && (
+                  <SharedPanel
+                    key={active.id}
+                    source={active}
+                    sourceNumber={files.indexOf(active) + 1}
+                    targetCount={files.filter((f) => marked.has(f.id) && f.id !== active.id).length}
+                    locked={locked}
+                    onApply={applySharedFields}
+                  />
+                )}
+                <div role="status">
+                  {shared && (
+                    <div className="mt-3">
+                      <Notice icon={shared.edit ? 'check_circle' : 'close'}>
+                        <p>{shared.message}</p>
+                        {shared.edit && (
+                          <button
+                            type="button"
+                            onClick={undoSharedEdit}
+                            disabled={locked}
+                            className={buttonClassName('secondary', 'sm', 'mt-3')}
+                          >
+                            Fortryd
+                          </button>
+                        )}
+                      </Notice>
+                    </div>
+                  )}
+                </div>
 
                 {files.length > 1 && (
                   <div className="mt-3 pt-4 border-t border-line">
@@ -823,17 +906,34 @@ interface TrackRowProps {
   onRemove: (id: string) => void;
   /** True while "Download alle som ZIP" runs: the row can be viewed but not removed. */
   locked: boolean;
+  /** Shows the checkbox for shared edits; only worth it with more than one file. */
+  markable: boolean;
+  marked: boolean;
+  onMark: (id: string) => void;
 }
 
 /** One line of the track list. Memoized: typing in the editor only re-renders the active row. */
-const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSelect, onRemove, locked }: TrackRowProps) {
+const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSelect, onRemove, locked, markable, marked, onMark }: TrackRowProps) {
+  const name = f.editable.title || f.file.name;
   return (
-    <li className="group relative">
+    <li className="group relative flex items-center">
+      {/* Marking is its own control: it never changes which file the editor shows. */}
+      {markable && (
+        <label className="flex h-11 w-8 shrink-0 cursor-pointer items-center justify-center">
+          <input
+            type="checkbox"
+            checked={marked}
+            onChange={() => onMark(f.id)}
+            aria-label={`Markér ${name}`}
+            className="h-4 w-4 accent-brand"
+          />
+        </label>
+      )}
       <button
         onClick={() => onSelect(f.id)}
         title={f.file.name}
         aria-current={active ? 'true' : undefined}
-        className={`w-full text-left pl-2 pr-10 py-2.5 rounded-field transition-colors grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 ${
+        className={`min-w-0 flex-1 text-left pl-2 pr-10 py-2.5 rounded-field transition-colors grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 ${
           active ? 'bg-brand-tint' : 'hover:bg-sunken'
         }`}
       >
@@ -872,6 +972,25 @@ const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSelect, o
     </li>
       );
 });
+
+/** "Markér alle", checked when all are, half-checked when some are. */
+function MarkAll({ count, total, onChange }: { count: number; total: number; onChange: (all: boolean) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = count > 0 && count < total;
+  }, [count, total]);
+  return (
+    <div className="flex items-center justify-between gap-2 -mx-1 px-1 mb-1">
+      <label className="flex h-11 cursor-pointer items-center text-sm text-ink-dim hover:text-ink">
+        <span className="flex w-8 justify-center">
+          <input ref={ref} type="checkbox" checked={count === total} onChange={() => onChange(count !== total)} className="h-4 w-4 accent-brand" />
+        </span>
+        <span className="pl-2">{count === total ? 'Fravælg alle' : 'Markér alle'}</span>
+      </label>
+      {count > 0 && <span className="text-xs text-ink-dim tabular-nums">{formatNumber(count)} markeret</span>}
+    </div>
+  );
+}
 
 /** The progress figure to announce: every file for short batches, every tenth of the way for long ones. */
 function announced({ done, total }: { done: number; total: number }): number {

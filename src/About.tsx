@@ -38,7 +38,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Kan jeg rette flere filer?',
-    a: 'Ja. Læg dem ind på én gang, og ret dem en ad gangen fra listen. Gem dem hver for sig, eller tryk “Download alle som ZIP” og få dem samlet i én zip-fil.',
+    a: 'Ja. Læg dem ind på én gang, og ret dem en ad gangen fra listen. Skal flere numre have samme album, albumkunstner, år eller cover, så markér dem og brug “Fælles rettelse” til at kopiere fra den fil, du har åben. Gem dem hver for sig, eller tryk “Download alle som ZIP” og få dem samlet i én zip-fil.',
   },
 ];
 
