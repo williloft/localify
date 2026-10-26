@@ -81,6 +81,7 @@ export async function m4aToMp3(
   buffer: ArrayBuffer,
   { bitrateKbps = DEFAULT_BITRATE, onProgress, signal }: TranscodeOptions = {}
 ): Promise<Uint8Array> {
+  if (signal?.aborted) throw new Error('Afbrudt');
   const sampleRate = readSampleRate(buffer) ?? undefined;
 
   // decodeAudioData detaches the buffer it is given, and the caller still needs

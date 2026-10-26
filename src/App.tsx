@@ -9,7 +9,7 @@ import {
   type FileTags,
   type CoverArt,
 } from './lib/tags';
-import { zipSync } from 'fflate';
+import { openBatchZip } from './lib/batchZip';
 import { buildFilename, sanitizeSegment, type NamePattern } from './lib/filename';
 import { DecodeError } from './lib/transcode';
 import { fieldLabels, formatNumber, plural, skippedMessage } from './lib/fieldLabels';
@@ -60,6 +60,28 @@ interface BatchNote {
   warnings: string[];
 }
 
+/** Where "Download alle som ZIP" is: which file, how far a conversion has come, or finishing the zip. */
+interface BatchProgress {
+  done: number;
+  total: number;
+  /** 0–1 while the current file is converted to MP3, null otherwise. */
+  fileProgress?: number | null;
+  /** Every file is in; the archive is being finished. */
+  packing?: boolean;
+}
+
+/** The button's text while a batch runs. Short, so it fits the 300px list on every screen. */
+function batchLabel(b: BatchProgress): string {
+  return b.packing ? 'Pakker zip-filen…' : `Gemmer ${formatNumber(b.done + 1)} af ${formatNumber(b.total)}…`;
+}
+
+/** The line under the button: what the current file is going through. */
+function batchDetail(b: BatchProgress, files: number): string {
+  if (b.packing) return 'Lægger filerne sammen i én zip-fil';
+  if (b.fileProgress != null) return `Koder om til MP3 · ${Math.round(b.fileProgress * 100)} %`;
+  return `${formatNumber(files)} filer i én zip-fil`;
+}
+
 /** Lists in the batch note show this many lines before "+N mere". */
 const NOTE_LINES = 5;
 
@@ -67,7 +89,8 @@ const NOTE_LINES = 5;
 async function renderFile(
   f: LoadedFile,
   pattern: NamePattern,
-  onProgress?: (p: number) => void
+  onProgress?: (p: number) => void,
+  signal?: AbortSignal
 ): Promise<{ blob: Blob; name: string; notes: string[] }> {
   const { blob, failed, reencoded, dropped, extension } = await saveFile({
     buffer: await bufferOf(f.file),
@@ -77,6 +100,7 @@ async function renderFile(
     carried: f.read.carried,
     outputFormat: f.outputFormat,
     onProgress,
+    signal,
   });
   const notes: string[] = [];
   if (failed.length) notes.push(`Kunne ikke skrive: ${fieldLabels(failed)}`);
@@ -125,10 +149,10 @@ export default function App() {
   /** The last save failed only because the browser cannot decode AAC; M4A would work. */
   const [offerM4a, setOfferM4a] = useState(false);
   /** Progress of "Download alle som ZIP", null when idle. */
-  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
+  const [batch, setBatch] = useState<BatchProgress | null>(null);
   const [batchNote, setBatchNote] = useState<BatchNote | null>(null);
-  /** Set by the Stop button; the batch checks it between files. */
-  const stopBatch = useRef(false);
+  /** Aborted by the Stop button: cuts a conversion short and terminates the zip worker. */
+  const stopBatch = useRef<AbortController | null>(null);
   const [pattern, setPatternState] = useState<NamePattern>(storedPattern);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -278,52 +302,70 @@ export default function App() {
     // A snapshot of the objects as they are now. An edit replaces a file's
     // object, so comparing against this tells which files changed mid-batch.
     const list = latest.current.files;
-    stopBatch.current = false;
+    const stop = new AbortController();
+    stopBatch.current = stop;
     setBusy(true);
     setBatchNote(null);
-    const entries: Record<string, Uint8Array> = {};
+    // Files go to a worker one at a time as they are written, and the worker
+    // packs them, so the page neither holds the whole batch as bytes nor
+    // freezes while the archive is built. Each export starts from the files as
+    // they are now; nothing from an earlier export is reused.
+    const zip = openBatchZip(stop.signal);
     const used = new Set<string>();
     const skipped: string[] = [];
     const warnings: string[] = [];
     const packed = new Set<LoadedFile>();
+    const stopped = () => setBatchNote({ stopped: true, skipped: [], warnings: [] });
 
     try {
       for (let i = 0; i < list.length; i++) {
-        if (stopBatch.current) {
-          setBatchNote({ stopped: true, skipped: [], warnings: [] });
-          return;
-        }
+        if (stop.signal.aborted) return stopped();
         const f = list[i];
-        setBatch({ done: i, total: list.length });
+        setBatch({ done: i, total: list.length, fileProgress: null });
+        let rendered: Awaited<ReturnType<typeof renderFile>>;
         try {
-          const { blob, name, notes } = await renderFile(f, pattern);
-          const entry = uniqueName(name, used);
-          entries[entry] = new Uint8Array(await blob.arrayBuffer());
-          packed.add(f);
-          if (notes.length) warnings.push(`${entry}: ${notes.join('. ')}`);
+          rendered = await renderFile(
+            f,
+            pattern,
+            (p) => setBatch({ done: i, total: list.length, fileProgress: p }),
+            stop.signal
+          );
         } catch (e) {
+          if (stop.signal.aborted) return stopped();
           // One file that cannot be written must not cost the user the other eleven.
           const why = e instanceof DecodeError
             ? 'browseren kan ikke afkode lyden. Vælg M4A under “Gem som” for den fil'
             : e instanceof Error ? e.message : 'kunne ikke skrives';
           skipped.push(`${f.file.name}: ${why}`);
+          continue;
         }
+        const entry = uniqueName(rendered.name, used);
+        await zip.add(entry, rendered.blob);
+        packed.add(f);
+        if (rendered.notes.length) warnings.push(`${entry}: ${rendered.notes.join('. ')}`);
       }
 
+      if (stop.signal.aborted) return stopped();
       if (packed.size) {
-        // Audio is already compressed, so store it as it is instead of spending time deflating it.
-        download(new Blob([zipSync(entries, { level: 0 }) as BlobPart], { type: 'application/zip' }), zipName(list));
+        setBatch({ done: list.length, total: list.length, packing: true });
+        const archive = await zip.finish();
+        // Stop pressed while the archive was finishing: no late download.
+        if (stop.signal.aborted) return stopped();
+        download(archive, zipName(list));
         // Only files still identical to what went into the zip count as saved.
         setFiles((prev) => prev.map((f) => (packed.has(f) ? { ...f, dirty: false, saved: true } : f)));
       }
       setBatchNote(skipped.length || warnings.length ? { skipped, warnings } : null);
     } catch {
+      if (stop.signal.aborted) return stopped();
       setBatchNote({
         failed: 'Zip-filen blev for stor til browseren. Gem færre filer ad gangen, eller gem dem enkeltvis.',
         skipped: [],
         warnings: [],
       });
     } finally {
+      zip.close();
+      stopBatch.current = null;
       setBatch(null);
       setBusy(false);
     }
@@ -554,25 +596,25 @@ export default function App() {
                       >
                         <Icon name="download" className="w-5 h-5" />
                         <span className="tabular-nums truncate-fname">
-                          {batch ? `Gemmer ${formatNumber(batch.done + 1)} af ${formatNumber(batch.total)}…` : 'Download alle som ZIP'}
+                          {batch ? batchLabel(batch) : 'Download alle som ZIP'}
                         </span>
                       </button>
                       {batch && (
                         <button
                           type="button"
-                          onClick={() => { stopBatch.current = true; }}
+                          onClick={() => stopBatch.current?.abort()}
                           className={buttonClassName('secondary', 'md', 'shrink-0')}
                         >
                           Stop
                         </button>
                       )}
                     </div>
-                    <p className="mt-2 text-center text-xs text-ink-dim">
-                      {formatNumber(files.length)} filer i én zip-fil
+                    <p className="mt-2 text-center text-xs text-ink-dim tabular-nums">
+                      {batch ? batchDetail(batch, files.length) : `${formatNumber(files.length)} filer i én zip-fil`}
                     </p>
                     {/* Progress for screen readers, announced in steps so 1,000 files don't mean 1,000 announcements. */}
                     <p role="status" className="sr-only">
-                      {batch ? `Gemmer ${formatNumber(announced(batch))} af ${formatNumber(batch.total)}` : ''}
+                      {batch ? (batch.packing ? 'Pakker zip-filen' : `Gemmer ${formatNumber(announced(batch))} af ${formatNumber(batch.total)}`) : ''}
                     </p>
                     <div role="alert">
                       {batchNote && <BatchNoteView note={batchNote} />}

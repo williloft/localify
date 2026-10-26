@@ -102,6 +102,19 @@ rå MP4-bytes betyder ingenting i en MP3. De kendte felter oversættes
 lamejs er LGPL-3.0. Den ligger i sin egen chunk og linkes ikke ind i resten af
 koden.
 
+## Download alle som ZIP
+
+Filerne skrives én ad gangen og sendes videre til en worker, der lægger dem i
+zip-filen med det samme (fflates `Zip` + `ZipPassThrough`, uden komprimering —
+lyden er allerede komprimeret). Siden holder derfor ikke hele batchen som bytes
+på én gang, og den fryser ikke, mens arkivet bygges. Stop afbryder både en
+igangværende konvertering og pakningen, og der kommer ingen download bagefter.
+
+Begrænsningen er ærlig: den færdige zip-fil ligger stadig i hukommelsen som én
+Blob, før browseren kan gemme den. Der findes ingen bred browserunderstøttelse
+for at streame en download direkte til disken, så meget store batches kan
+stadig være for meget for en telefon. Gem dem i så fald i mindre bidder.
+
 ## Status
 
 v1. Understøtter MP3 og M4A, med konvertering til MP3. Næste skridt:

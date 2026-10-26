@@ -232,6 +232,8 @@ export interface ConvertInput extends WriteInput {
   outputFormat: AudioFormat;
   bitrateKbps?: number;
   onProgress?: (fraction: number) => void;
+  /** Stops a conversion between decoding and encoding, or mid-encode. */
+  signal?: AbortSignal;
 }
 
 export interface ConvertOutput extends WriteOutput {
@@ -249,7 +251,7 @@ export interface ConvertOutput extends WriteOutput {
  * is lossy — the caller is expected to have made that clear already.
  */
 export async function saveFile(input: ConvertInput): Promise<ConvertOutput> {
-  const { buffer, format, editable, cover, carried, outputFormat, bitrateKbps, onProgress } = input;
+  const { buffer, format, editable, cover, carried, outputFormat, bitrateKbps, onProgress, signal } = input;
 
   if (format === outputFormat) {
     const { blob, failed } = writeFileTags({ buffer, format, editable, cover, carried });
@@ -264,6 +266,7 @@ export async function saveFile(input: ConvertInput): Promise<ConvertOutput> {
   const mp3Audio = await m4aToMp3(buffer, {
     bitrateKbps: bitrateKbps ?? DEFAULT_BITRATE,
     onProgress,
+    signal,
   });
 
   const { frames, dropped } = mapM4aToId3(carried.items);
