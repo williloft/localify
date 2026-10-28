@@ -14,6 +14,7 @@ import { MarkAll, TrackRow } from './TrackList';
 import { BatchNoteView, BatchOverview } from './BatchPanel';
 import { announced, batchDetail, batchLabel, type BatchNote, type BatchProgress } from './lib/batchStatus';
 import { cachedChangesOf } from './lib/changes';
+import { markSaved, removalNeedsConfirm } from './lib/saved';
 import { applyShared, sharedFieldList, undoShared, type SharedEdit, type SharedField } from './lib/shared';
 import { About } from './About';
 import { Icon } from './Icon';
@@ -151,6 +152,8 @@ export default function App() {
     const { files: current, activeId: currentActive, batching } = latest.current;
     if (batching) return;
     const idx = current.findIndex((f) => f.id === id);
+    const target = current[idx];
+    if (removalNeedsConfirm(target) && !confirm(`“${target.file.name}” har ugemte ændringer. Fjern filen alligevel?`)) return;
     const next = current.filter((f) => f.id !== id);
     setFiles(next);
     setMarked((m) => { if (!m.has(id)) return m; const n = new Set(m); n.delete(id); return n; });
@@ -221,18 +224,20 @@ export default function App() {
 
   const save = useCallback(async () => {
     if (!active) return;
+    // The object being exported. An edit during the export replaces it, so it
+    // can tell afterwards whether the file changed in the meantime.
+    const snapshot = active;
     setBusy(true);
     setSaveNote('');
     setOfferM4a(false);
     setProgress(null);
     try {
-      const { blob, name, notes } = await renderFile(active, pattern, setProgress);
+      const { blob, name, notes } = await renderFile(snapshot, pattern, setProgress);
       if (notes.length) setSaveNote(`${notes.join('. ')}.`);
       download(blob, name);
 
-      setFiles((prev) =>
-        prev.map((f) => (f.id === active.id ? { ...f, dirty: false, saved: true } : f))
-      );
+      // Only the exported snapshot counts as saved; newer edits stay unsaved.
+      setFiles((prev) => markSaved(prev, new Set([snapshot])));
     } catch (e) {
       setSaveNote(e instanceof Error ? e.message : 'Noget gik galt under skrivning. Prøv igen.');
       setOfferM4a(e instanceof DecodeError);
@@ -298,7 +303,7 @@ export default function App() {
         if (stop.signal.aborted) return stopped();
         download(archive, zipName(list));
         // Only files still identical to what went into the zip count as saved.
-        setFiles((prev) => prev.map((f) => (packed.has(f) ? { ...f, dirty: false, saved: true } : f)));
+        setFiles((prev) => markSaved(prev, packed));
       }
       setBatchNote(skipped.length || warnings.length ? { skipped, warnings } : null);
     } catch {
