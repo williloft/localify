@@ -13,7 +13,7 @@ const BASE =
   'disabled:pointer-events-none disabled:opacity-60';
 
 const SIZES: Record<Size, string> = {
-  sm: 'h-10 px-4 text-sm',
+  sm: 'h-10 [@media(pointer:coarse)]:h-11 px-4 text-sm',
   md: 'min-h-11 px-6 text-[0.9375rem]',
   lg: 'min-h-14 px-6 text-lg',
 };

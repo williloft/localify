@@ -39,7 +39,7 @@ export const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSe
         onClick={() => onSelect(f.id)}
         title={f.file.name}
         aria-current={active ? 'true' : undefined}
-        className={`min-w-0 flex-1 text-left pl-2 pr-10 py-2.5 rounded-field transition-colors grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 ${
+        className={`min-w-0 flex-1 text-left pl-2 pr-11 py-2.5 rounded-field transition-colors grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 ${
           active ? 'bg-brand-tint' : 'hover:bg-sunken'
         }`}
       >
@@ -71,7 +71,7 @@ export const TrackRow = memo(function TrackRow({ file: f, index: i, active, onSe
         disabled={locked}
         aria-label={`Fjern ${f.editable.title || f.file.name} fra listen`}
         title="Fjern fra listen"
-        className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-full text-ink-dim hover:bg-surface hover:text-danger transition-[color,background-color,opacity] [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+        className="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full text-ink-dim hover:bg-surface hover:text-danger transition-[color,background-color,opacity] [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
       >
         <Icon name="close" className="w-4 h-4" />
       </button>

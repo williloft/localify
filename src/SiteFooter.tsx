@@ -2,7 +2,7 @@ import { Icon } from './Icon';
 
 const FOOTER_HEADING = 'mb-1 font-display text-xs font-extrabold uppercase tracking-[0.1em] text-ink';
 const FOOTER_LINK =
-  'self-start py-1 text-ink-dim underline decoration-transparent underline-offset-4 transition-colors hover:text-brand hover:decoration-current';
+  'self-start py-1 [@media(pointer:coarse)]:py-3 text-ink-dim underline decoration-transparent underline-offset-4 transition-colors hover:text-brand hover:decoration-current';
 
 /** The open-source libraries doing the work, as the README names them. */
 const LIBRARIES: { label: string; use: string; href: string }[] = [

@@ -477,7 +477,7 @@ export default function App() {
                     <button
                       onClick={clearAll}
                       disabled={locked}
-                      className="h-9 px-2.5 whitespace-nowrap rounded-full disabled:opacity-40 disabled:pointer-events-none text-sm text-ink-dim hover:text-danger hover:bg-danger-tint transition-colors"
+                      className="h-11 px-3 whitespace-nowrap rounded-full disabled:opacity-40 disabled:pointer-events-none text-sm text-ink-dim hover:text-danger hover:bg-danger-tint transition-colors"
                     >
                       Ryd listen
                     </button>
@@ -486,7 +486,7 @@ export default function App() {
                       disabled={locked}
                       aria-label="Tilføj flere filer"
                       title="Tilføj flere filer"
-                      className="w-9 h-9 flex items-center justify-center rounded-full text-brand hover:bg-brand-tint transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                      className="w-11 h-11 flex items-center justify-center rounded-full text-brand hover:bg-brand-tint transition-colors disabled:opacity-40 disabled:pointer-events-none"
                     >
                       <Icon name="add" className="w-5 h-5" />
                     </button>

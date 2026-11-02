@@ -175,7 +175,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
             <button
               type="button"
               onClick={() => coverInputRef.current?.click()}
-              className="h-9 px-2 rounded-full text-sm font-medium text-brand hover:bg-brand-tint transition-colors"
+              className="h-11 px-3 rounded-full text-sm font-medium text-brand hover:bg-brand-tint transition-colors"
             >
               {cover ? 'Udskift' : 'Vælg billede'}
             </button>
@@ -183,7 +183,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
               <button
                 type="button"
                 onClick={() => onChange({ cover: null })}
-                className="h-9 px-2 rounded-full text-sm text-ink-dim hover:text-danger hover:bg-danger-tint transition-colors"
+                className="h-11 px-3 rounded-full text-sm text-ink-dim hover:text-danger hover:bg-danger-tint transition-colors"
               >
                 Fjern
               </button>
@@ -277,7 +277,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
                       type="button"
                       aria-expanded={showAllCarried}
                       onClick={() => setShowAllCarried((v) => !v)}
-                      className="font-medium text-brand underline underline-offset-4 decoration-brand/40 hover:decoration-brand"
+                      className="font-medium text-brand underline underline-offset-4 decoration-brand/40 hover:decoration-brand [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:items-center"
                     >
                       {showAllCarried ? 'Vis færre' : `+${hiddenCarried} mere`}
                     </button>

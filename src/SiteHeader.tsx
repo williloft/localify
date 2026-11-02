@@ -69,7 +69,7 @@ export function SiteHeader({ empty, locked, onPick }: { empty: boolean; locked: 
                 key={link.id}
                 href={`#${link.id}`}
                 aria-current={isActive ? 'location' : undefined}
-                className={`relative items-center whitespace-nowrap px-2.5 sm:px-3 font-display text-[0.9375rem] font-semibold transition-colors ${
+                className={`relative min-h-11 items-center whitespace-nowrap px-2.5 sm:px-3 font-display text-[0.9375rem] font-semibold transition-colors ${
                   link.wide ? 'hidden sm:inline-flex' : 'inline-flex'
                 } ${isActive ? 'text-ink' : 'text-ink-dim hover:text-ink'}`}
               >

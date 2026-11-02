@@ -29,3 +29,9 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      # Playwright is only needed here, so it is not a dependency of the repo.
+      - name: Responsive check
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+          npm run test:responsive
