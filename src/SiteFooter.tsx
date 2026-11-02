@@ -58,13 +58,13 @@ export function SiteFooter() {
             href="https://lofty-seven.vercel.app"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Lavet af William Loft Andersen (åbner i ny fane)"
             className="group inline-flex min-h-11 items-center gap-1 self-start whitespace-nowrap text-[0.8125rem] sm:self-auto"
           >
             <span>Lavet af</span>
             <span className="font-display text-sm font-bold tracking-[-0.02em] text-ink transition-colors duration-150 [@media(hover:hover)]:group-hover:text-brand">
               Lofty
             </span>
+            <span className="sr-only">(åbner i ny fane)</span>
             <Icon
               name="arrow_up_right"
               className="w-3.5 h-3.5 text-brand transition-transform duration-150 [@media(hover:hover)]:group-hover:translate-x-0.5 [@media(hover:hover)]:group-hover:-translate-y-0.5 motion-reduce:transition-none"

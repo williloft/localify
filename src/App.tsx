@@ -406,7 +406,8 @@ export default function App() {
                 type="button"
                 {...dropHandlers}
                 onClick={pick}
-                aria-label="Vælg musikfiler, eller slip dem her"
+                aria-labelledby="dropzone-action"
+                aria-describedby="dropzone-hint"
                 className="lift group relative block w-full max-w-[440px] lg:max-w-[520px] mx-auto lg:mx-0 aspect-square"
               >
                 {/* The record peeks out of the sleeve, and slides further out on hover. */}
@@ -432,13 +433,14 @@ export default function App() {
                   <span aria-hidden="true" className="flex flex-col gap-3.5">
                     {['w-3/4', 'w-1/2', 'w-2/3'].map((w, i) => (
                       <span key={w} className="flex items-center gap-4">
-                        <span className="font-display text-sm tabular-nums text-ink-dim/60">0{i + 1}</span>
+                        {/* Pure decoration: the number is generated content, so it is neither text to read nor text to measure. */}
+                        <span data-n={`0${i + 1}`} className="font-display text-sm tabular-nums text-ink-dim/60 before:content-[attr(data-n)]" />
                         <span className={`h-2 rounded-full bg-sunken ${w}`} />
                       </span>
                     ))}
                   </span>
                   <span>
-                    <span className="block font-display text-2xl sm:text-3xl font-bold tracking-[-0.03em] text-ink">
+                    <span id="dropzone-action" className="block font-display text-2xl sm:text-3xl font-bold tracking-[-0.03em] text-ink">
                       {reading ? readingLabel(reading) : (
                         <>
                           <span className="[@media(pointer:fine)]:hidden">Tryk for at vælge</span>
@@ -446,7 +448,7 @@ export default function App() {
                         </>
                       )}
                     </span>
-                    <span className="mt-2 block text-ink-dim">MP3 og M4A, gerne flere ad gangen.</span>
+                    <span id="dropzone-hint" className="mt-2 block text-ink-dim">MP3 og M4A, gerne flere ad gangen.</span>
                   </span>
                 </span>
                 </span>
