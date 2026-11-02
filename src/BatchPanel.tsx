@@ -76,11 +76,28 @@ export function BatchNoteView({ note }: { note: BatchNote }) {
   if (note.stopped) {
     return <div className="mt-3"><Notice icon="close"><p>Stoppet. Der blev ikke gemt noget.</p></Notice></div>;
   }
+  const clean = note.packed !== undefined && !note.failed && note.skipped.length === 0 && note.warnings.length === 0;
+  if (clean) {
+    return (
+      <div className="mt-3">
+        <Notice icon="check_circle">
+          <p>ZIP-filen med {plural(note.packed!, 'fil', 'filer')} er lavet og afleveret til din browser. Hvor den lander, afgør browserens download-indstillinger.</p>
+        </Notice>
+      </div>
+    );
+  }
   return (
     <div className="mt-3">
       <Notice tone="danger" icon="warning">
         <div className="space-y-3 break-words">
           {note.failed && <p>{note.failed}</p>}
+          {note.packed !== undefined && note.total !== undefined && !note.failed && (
+            <p>
+              {note.packed < note.total
+                ? `${formatNumber(note.packed)} af ${formatNumber(note.total)} filer er med i zip-filen. Dine rettelser er bevaret.`
+                : 'ZIP-filen er lavet og afleveret til din browser.'}
+            </p>
+          )}
           {note.skipped.length > 0 && (
             <NoteList title={`${plural(note.skipped.length, 'fil kom', 'filer kom')} ikke med:`} lines={note.skipped} />
           )}

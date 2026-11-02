@@ -12,7 +12,7 @@ import { SiteHeader } from './SiteHeader';
 import { SiteFooter } from './SiteFooter';
 import { MarkAll, TrackRow } from './TrackList';
 import { BatchNoteView, BatchOverview } from './BatchPanel';
-import { announced, batchDetail, batchLabel, type BatchNote, type BatchProgress } from './lib/batchStatus';
+import { announced, batchBar, batchDetail, batchLabel, readingDetail, readingLabel, type BatchNote, type BatchProgress } from './lib/batchStatus';
 import { cachedChangesOf } from './lib/changes';
 import { markSaved, removalNeedsConfirm } from './lib/saved';
 import { applyShared, sharedFieldList, undoShared, type SharedEdit, type SharedField } from './lib/shared';
@@ -20,16 +20,12 @@ import { About } from './About';
 import { Icon } from './Icon';
 import { buttonClassName } from './ui';
 import { Notice } from './Notice';
+import { ProgressBar } from './ProgressBar';
 import { Privacy } from './Privacy';
 import { rememberedPattern, writePattern } from './lib/remember';
 
 // Worst-case data switch for break-ui. Dev builds only; production drops the import.
 const DataToggle = import.meta.env.DEV ? lazy(() => import('./dev/DataToggle')) : null;
-
-/** What the page says while files are being read. */
-function readingLabel({ done, total }: { done: number; total: number }): string {
-  return total === 1 ? 'Læser filen…' : `Læser ${formatNumber(done + 1)} af ${formatNumber(total)}…`;
-}
 
 export default function App() {
   const [files, setFiles] = useState<LoadedFile[]>([]);
@@ -305,11 +301,13 @@ export default function App() {
         // Only files still identical to what went into the zip count as saved.
         setFiles((prev) => markSaved(prev, packed));
       }
-      setBatchNote(skipped.length || warnings.length ? { skipped, warnings } : null);
+      // Only now is the archive finished and handed to the browser. That is all
+      // the page can know: whether the browser saves it is up to the browser.
+      setBatchNote(packed.size ? { skipped, warnings, packed: packed.size, total: list.length } : { skipped, warnings, failed: 'Ingen af filerne kunne skrives, så der blev ikke lavet en zip-fil. Dine rettelser er bevaret.' });
     } catch {
       if (stop.signal.aborted) return stopped();
       setBatchNote({
-        failed: 'Zip-filen blev for stor til browseren. Gem færre filer ad gangen, eller gem dem enkeltvis.',
+        failed: 'Zip-filen blev for stor til browseren. Gem færre filer ad gangen, eller gem dem enkeltvis. Dine rettelser er bevaret.',
         skipped: [],
         warnings: [],
       });
@@ -448,6 +446,12 @@ export default function App() {
                         </>
                       )}
                     </span>
+                    {reading && readingDetail(reading) ? (
+                      <span aria-hidden="true" className="mt-3 block max-w-xs">
+                        <ProgressBar value={reading.done} max={reading.total} />
+                        <span className="mt-2 block text-sm text-ink-dim tabular-nums">{readingDetail(reading)}</span>
+                      </span>
+                    ) : null}
                     <span id="dropzone-hint" className="mt-2 block text-ink-dim">MP3 og M4A, gerne flere ad gangen.</span>
                   </span>
                 </span>
@@ -457,7 +461,9 @@ export default function App() {
           </div>
 
           {/* One calm announcement while files are read, not one per file. */}
-          <p role="status" className="sr-only">{reading ? 'Læser filer' : ''}</p>
+          <p role="status" className="sr-only">
+            {reading ? (reading.total === 1 ? 'Læser filen' : `Læser fil ${formatNumber(announced(reading))} af ${formatNumber(reading.total)}`) : ''}
+          </p>
 
           {/* Kept mounted so screen readers announce the message when it appears. */}
           {!empty && <div role="alert">{errorBox}</div>}
@@ -524,7 +530,15 @@ export default function App() {
                 </ol>
                 {/* Files added to a list already there: the list and the open editor stay as they are, and this says what is coming. */}
                 {reading && (
-                  <p aria-hidden="true" className="mt-2 px-2 text-sm text-ink-dim tabular-nums">{readingLabel(reading)}</p>
+                  <div aria-hidden="true" className="mt-2 px-2 text-sm text-ink-dim tabular-nums">
+                    <p>{readingLabel(reading)}</p>
+                    {readingDetail(reading) && (
+                      <>
+                        <ProgressBar value={reading.done} max={reading.total} className="my-1.5" />
+                        <p>{readingDetail(reading)}</p>
+                      </>
+                    )}
+                  </div>
                 )}
 
                 {active && files.some((f) => marked.has(f.id)) && (
@@ -582,12 +596,19 @@ export default function App() {
                       )}
                     </div>
                     <p className="mt-2 text-center text-xs text-ink-dim tabular-nums">
-                      {batch ? batchDetail(batch, files.length) : `${formatNumber(files.length)} filer i én zip-fil`}
+                      {batch ? batchDetail(batch) : `${formatNumber(files.length)} filer i én zip-fil`}
                     </p>
+                    {batch && (
+                      <ProgressBar
+                        className="mt-2"
+                        label={batch.packing ? 'Pakker ZIP' : 'Færdige filer'}
+                        {...(batchBar(batch) ?? {})}
+                      />
+                    )}
                     {!batch && <BatchOverview items={overview} />}
                     {/* Progress for screen readers, announced in steps so 1,000 files don't mean 1,000 announcements. */}
                     <p role="status" className="sr-only">
-                      {batch ? (batch.packing ? 'Pakker zip-filen' : `Gemmer ${formatNumber(announced(batch))} af ${formatNumber(batch.total)}`) : ''}
+                      {batch ? (batch.packing ? 'Pakker ZIP' : `Skriver fil ${formatNumber(announced(batch))} af ${formatNumber(batch.total)}`) : ''}
                     </p>
                     <div role="alert">
                       {batchNote && <BatchNoteView note={batchNote} />}

@@ -7,6 +7,7 @@ import { changesOf } from './lib/changes';
 import { ChangeList } from './Changes';
 import { fieldLabelList, fieldLabels, formatBytes, formatDuration, plural } from './lib/fieldLabels';
 import { Icon } from './Icon';
+import { ProgressBar } from './ProgressBar';
 import { Notice } from './Notice';
 import { buttonClassName, FIELD } from './ui';
 
@@ -396,6 +397,7 @@ export function TagEditor({ loaded, trackNumber, busy, pattern, onPatternChange,
               : 'Gem som ny fil'}
           </span>
         </button>
+        {busy && progress !== null && <ProgressBar label="Omkodning til MP3" value={progress} max={1} />}
 
         {/* Next to the button that caused it, so it lands in view on a phone. */}
         <div role="alert">
