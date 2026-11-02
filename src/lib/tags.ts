@@ -24,7 +24,6 @@ import {
 } from './id3';
 import { readMp4Tags, writeMp4Tags, type IlstItem, type Mp4Cover } from './mp4';
 import { m4aToMp3, DEFAULT_BITRATE } from './transcode';
-import { parseBuffer } from 'music-metadata';
 
 export type { EditableTags, CoverArt } from './id3';
 
@@ -119,7 +118,7 @@ async function readKnownFormat(buffer: ArrayBuffer): Promise<FileTags> {
   // Duration is not in ilst; ask the parser that already knows every container.
   let durationSec: number | null = null;
   try {
-    const md = await parseBuffer(new Uint8Array(buffer), { mimeType: 'audio/mp4' });
+    const md = await (await import('music-metadata')).parseBuffer(new Uint8Array(buffer), { mimeType: 'audio/mp4' });
     durationSec = md.format.duration ?? null;
   } catch {
     // A duration we cannot read is cosmetic; never fail the whole read for it.

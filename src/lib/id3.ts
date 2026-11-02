@@ -1,4 +1,3 @@
-import { parseBuffer } from 'music-metadata';
 import { ID3Writer } from 'browser-id3-writer';
 
 /** One frame as music-metadata reports it. Its own dict type widens to unknown. */
@@ -135,7 +134,7 @@ function toWriterValue(writerId: string, raw: unknown): unknown | null {
 }
 
 export async function readTags(buffer: ArrayBuffer): Promise<ReadResult> {
-  const md = await parseBuffer(new Uint8Array(buffer), { mimeType: 'audio/mpeg' });
+  const md = await (await import('music-metadata')).parseBuffer(new Uint8Array(buffer), { mimeType: 'audio/mpeg' });
 
   const native = md.native as unknown as Record<string, NativeFrame[] | undefined>;
   // Prefer the richest ID3v2 tag present.
